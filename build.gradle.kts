@@ -28,12 +28,14 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect:${kotlinVersion}")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:${kotlinVersion}")
     runtimeOnly("io.r2dbc:r2dbc-h2")
+    implementation("io.r2dbc:r2dbc-pool")
     runtimeOnly("org.apache.logging.log4j:log4j-api:2.19.0")
     runtimeOnly("org.apache.logging.log4j:log4j-slf4j-impl:2.17.2")
     testImplementation("io.micronaut.test:micronaut-test-rest-assured")
     compileOnly("org.graalvm.nativeimage:svm")
 
     implementation("io.projectreactor.kafka:reactor-kafka:1.3.12")
+    implementation("org.apache.kafka:kafka-clients:3.2.3")
 
     implementation("org.apache.avro:avro:1.11.1")
     implementation("io.confluent:kafka-avro-serializer:7.2.1")
@@ -42,6 +44,8 @@ dependencies {
 
     runtimeOnly("com.fasterxml.jackson.module:jackson-module-kotlin")
 
+    testImplementation("org.assertj:assertj-core:3.23.1")
+    testImplementation("org.testcontainers:kafka:1.17.3")
 }
 
 
@@ -67,7 +71,7 @@ tasks {
 graalvmNative.toolchainDetection.set(false)
 micronaut {
     runtime("netty")
-    testRuntime("kotest")
+    testRuntime("junit")
     processing {
         incremental(true)
         annotations("io.vonsowic.*")

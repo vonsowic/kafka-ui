@@ -1,16 +1,13 @@
 package io.vonsowic.config
 
-import io.micronaut.context.annotation.Bean
 import io.micronaut.context.annotation.Factory
 import io.micronaut.context.annotation.Property
-import io.micronaut.context.annotation.PropertySource
 import io.vonsowic.KafkaEventPart
 import io.vonsowic.utils.DelegatingDeserializer
 import io.vonsowic.utils.DelegatingSerializer
 import jakarta.inject.Singleton
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.common.serialization.StringDeserializer
 import reactor.kafka.receiver.KafkaReceiver
 import reactor.kafka.receiver.ReceiverOptions
 import reactor.kafka.sender.KafkaSender
@@ -38,16 +35,15 @@ class KafkaFactory {
     }
 
     @Singleton
-    fun kafkaProducer(): KafkaSender<KafkaEventPart, KafkaEventPart> {
-        val props: Map<String, Any> = mapOf(
-            ProducerConfig.BOOTSTRAP_SERVERS_CONFIG to "localhost:9092",
-            ProducerConfig.CLIENT_ID_CONFIG to "kafka-ui-main",
-            ProducerConfig.ACKS_CONFIG to "all",
-            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG to DelegatingSerializer::class.java,
-            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG to DelegatingSerializer::class.java,
-        )
+    fun kafkaProducer(@Property(name = "kafka") config: Properties): KafkaSender<KafkaEventPart, KafkaEventPart> {
+        val producerProps = Properties()
+        producerProps.putAll(config)
+        producerProps[ProducerConfig.CLIENT_ID_CONFIG] = "kafka-ui-main"
+        producerProps[ProducerConfig.ACKS_CONFIG] = "all"
+        producerProps[ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG] = DelegatingSerializer::class.java
+        producerProps[ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG] = DelegatingSerializer::class.java
 
-        val senderOptions: SenderOptions<KafkaEventPart, KafkaEventPart> = SenderOptions.create(props)
+        val senderOptions: SenderOptions<KafkaEventPart, KafkaEventPart> = SenderOptions.create(producerProps)
         return KafkaSender.create(senderOptions)
     }
 }
