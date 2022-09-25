@@ -2,6 +2,7 @@ package io.vonsowic.utils
 
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG
 import io.confluent.kafka.serializers.KafkaAvroDeserializer
+import io.confluent.kafka.serializers.KafkaAvroSerializer
 import io.vonsowic.KafkaEventPart
 import io.vonsowic.KafkaEventPartType
 import org.apache.kafka.common.errors.SerializationException
@@ -12,13 +13,14 @@ import org.apache.kafka.common.serialization.StringSerializer
 
 class DelegatingSerializer(
     private val stringSerializer: StringSerializer = StringSerializer(),
+    private var avroSerializer: KafkaAvroSerializer? = null
 ) : Serializer<KafkaEventPart> {
 
     override fun serialize(topic: String, data: KafkaEventPart?): ByteArray? {
         return when (data?.type) {
             null -> null
             KafkaEventPartType.STRING -> stringSerializer.serialize(topic, data.data as String)
-            KafkaEventPartType.AVRO -> TODO()
+            KafkaEventPartType.AVRO -> (avroSerializer ?: throw io.vonsowic.utils.SerializationException("schema registry is not configured")).serialize(topic, data)
             KafkaEventPartType.NIL -> null
         }
     }
@@ -58,3 +60,5 @@ class DelegatingDeserializer(
         }
     }
 }
+
+class SerializationException(message: String) : RuntimeException(message)
