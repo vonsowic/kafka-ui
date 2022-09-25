@@ -34,7 +34,7 @@ import kotlin.reflect.KClass
 private const val TEST_CONSUMER_QUEUE_CAPACITY = 1000
 private val TEST_CONSUMER_POLL_DURATION = Duration.ofMillis(250)
 private const val REPLICATION_FACTOR: Short = 1
-private const val SCHEMA_REGISTRY_URL = "mock://schema.registry"
+private const val SCHEMA_REGISTRY_URL = "http://localhost:8081"
 
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.CLASS)

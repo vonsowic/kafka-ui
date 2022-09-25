@@ -1,5 +1,6 @@
 package io.vonsowic.utils
 
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG
 import io.confluent.kafka.serializers.KafkaAvroDeserializer
 import io.confluent.kafka.serializers.KafkaAvroSerializer
@@ -13,20 +14,26 @@ import org.apache.kafka.common.serialization.StringSerializer
 
 class DelegatingSerializer(
     private val stringSerializer: StringSerializer = StringSerializer(),
-    private var avroSerializer: KafkaAvroSerializer? = null
+    private var avroSerializer: KafkaAvroSerializer? = null,
 ) : Serializer<KafkaEventPart> {
 
-    override fun serialize(topic: String, data: KafkaEventPart?): ByteArray? {
-        return when (data?.type) {
-            null -> null
+    override fun serialize(topic: String, data: KafkaEventPart): ByteArray? {
+        return when (data.type) {
             KafkaEventPartType.STRING -> stringSerializer.serialize(topic, data.data as String)
-            KafkaEventPartType.AVRO -> (avroSerializer ?: throw io.vonsowic.utils.SerializationException("schema registry is not configured")).serialize(topic, data)
+            KafkaEventPartType.AVRO ->
+                (avroSerializer ?: throw SerializationException("schema registry is not configured"))
+                    .serialize(topic, data.data)
             KafkaEventPartType.NIL -> null
         }
     }
 
-    override fun configure(configs: MutableMap<String, *>?, isKey: Boolean) {
+    override fun configure(configs: MutableMap<String, *>, isKey: Boolean) {
         stringSerializer.configure(configs, isKey)
+        if (configs.contains(SCHEMA_REGISTRY_URL_CONFIG)) {
+            avroSerializer =
+                KafkaAvroSerializer()
+                    .apply { configure(configs, isKey) }
+        }
     }
 }
 
@@ -60,5 +67,3 @@ class DelegatingDeserializer(
         }
     }
 }
-
-class SerializationException(message: String) : RuntimeException(message)

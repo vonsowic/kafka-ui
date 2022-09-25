@@ -63,10 +63,10 @@ class KafkaFactory {
         return Admin.create(config)
     }
 
-    @Requires(configuration = AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG)
+    @Requires(property = "kafka.${AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG}")
     @Singleton
     fun schemaRegistryClient(@KafkaProperties config: Properties): SchemaRegistryClient {
-        return config.getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG)
+        return config.getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG)
             .takeIf { !it.startsWith("mock") }
             ?.let { CachedSchemaRegistryClient(it, 500) }
             ?: MockSchemaRegistryClient()
