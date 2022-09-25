@@ -19,4 +19,7 @@ interface AppClient {
 
     @Get("/api/events")
     fun fetchEvents(@QueryValue("topic") topics: Collection<String>): HttpResponse<List<KafkaEvent>>
+
+    @Get("/api/topics")
+    fun listTopics(): HttpResponse<List<ListTopicItem>>
 }

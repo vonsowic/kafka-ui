@@ -7,7 +7,6 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.util.*
 
-const val EMPTY_TOPIC = "empty-topic"
 const val TEST_TOPIC = "test-topic"
 
 @Topic(topic = TEST_TOPIC)
@@ -16,10 +15,9 @@ class ConsumerTest(
     private val httpClient: AppClient
 ) {
 
-    @Topic(topic = EMPTY_TOPIC)
     @Test
     fun `should fetch empty list`() {
-        with(httpClient.fetchEvents(EMPTY_TOPIC)) {
+        with(httpClient.fetchEvents(TEST_TOPIC)) {
             assertThat(status).isEqualTo(HttpStatus.OK)
             assertThat(body()).isEmpty()
         }

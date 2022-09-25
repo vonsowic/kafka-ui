@@ -50,8 +50,6 @@ class KafkaFactory {
 
     @Singleton
     fun admin(@Property(name = "kafka") config: Properties): Admin {
-        val adminConfig = Properties()
-        adminConfig.putAll(config)
-        return Admin.create(adminConfig)
+        return Admin.create(config)
     }
 }

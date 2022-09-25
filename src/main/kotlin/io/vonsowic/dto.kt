@@ -36,3 +36,16 @@ enum class KafkaEventPartType {
     AVRO,
     NIL
 }
+
+data class PartitionMetadata(
+    val id: Int
+)
+
+data class TopicMetadata(
+    val name: String,
+    val partitions: Collection<PartitionMetadata>
+)
+
+data class ListTopicItem(
+    val name: String
+)

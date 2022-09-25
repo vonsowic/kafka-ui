@@ -1,5 +1,8 @@
 package io.vonsowic.services
 
+import io.vonsowic.ListTopicItem
+import io.vonsowic.PartitionMetadata
+import io.vonsowic.TopicMetadata
 import jakarta.inject.Singleton
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.common.TopicPartitionInfo
@@ -8,19 +11,22 @@ import reactor.core.publisher.Mono
 import java.util.UUID
 
 
-data class PartitionMetadata(
-    val id: Int
-)
-
-data class TopicMetadata(
-    val name: String,
-    val partitions: Collection<PartitionMetadata>
-)
-
 @Singleton
 class MetadataService(
     private val admin: Admin
 ) {
+
+    fun listTopics(): Flux<ListTopicItem> =
+        admin
+            .listTopics()
+            .let { Mono.fromCallable { it.listings().get() } }
+            .flatMapIterable { it }
+            .map {
+                ListTopicItem(
+                    name = it.name()
+                )
+            }
+
 
     fun topicsMetadata(topics: Collection<String>): Flux<TopicMetadata> =
         admin.describeTopics(topics)

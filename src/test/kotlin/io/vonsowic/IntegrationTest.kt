@@ -1,6 +1,7 @@
 package io.vonsowic
 
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest
+import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.admin.NewTopic
@@ -13,14 +14,10 @@ import org.apache.kafka.clients.producer.Producer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.serialization.StringSerializer
-import org.junit.jupiter.api.extension.BeforeAllCallback
-import org.junit.jupiter.api.extension.BeforeEachCallback
-import org.junit.jupiter.api.extension.ExtendWith
-import org.junit.jupiter.api.extension.ExtensionContext
-import org.junit.jupiter.api.extension.ParameterContext
-import org.junit.jupiter.api.extension.ParameterResolver
+import org.junit.jupiter.api.extension.*
 import org.testcontainers.containers.KafkaContainer
 import org.testcontainers.utility.DockerImageName
+import java.lang.Thread.sleep
 import java.time.Duration
 import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
@@ -65,54 +62,71 @@ annotation class Topic(
 class TestConsumer<K, V>(private val consumer: Consumer<K, V>) {
 
     private val queue: ArrayBlockingQueue<ConsumerRecord<K, V>> = ArrayBlockingQueue(TEST_CONSUMER_QUEUE_CAPACITY)
-
-    init {
+    private val thread =
         thread {
-            while (true) {
-                consumer
-                    .poll(TEST_CONSUMER_POLL_DURATION)
-                    .let { records ->
-                        queue.addAll(records)
-                    }
+            try {
+                while (true) {
+                    consumer
+                        .poll(TEST_CONSUMER_POLL_DURATION)
+                        .let { records ->
+                            queue.addAll(records)
+                        }
+                }
+            } catch (_: InterruptedException) {
+                consumer.close()
             }
         }
-    }
 
     fun poll(duration: Duration = Duration.ofSeconds(3)): ConsumerRecord<K, V>? =
         queue.poll(duration.toMillis(), TimeUnit.MILLISECONDS)
 
-    fun clear() {
-        queue.clear()
+    fun close() {
+        thread.interrupt()
     }
 }
 
-class KafkaExtension : BeforeAllCallback, BeforeEachCallback, ParameterResolver {
+class KafkaExtension : BeforeAllCallback, BeforeEachCallback, AfterEachCallback, ParameterResolver {
 
     private val kafkaContainer = KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:6.2.1"))
     private val consumersByTopic = mutableMapOf<String, TestConsumer<*, *>>()
+    private lateinit var admin: Admin
 
     override fun beforeAll(context: ExtensionContext) {
         kafkaContainer.start()
         System.setProperty("kafka.bootstrap.servers", bootstrapServers())
 
-        val admin =
+        admin =
             AdminClient.create(
                 Properties()
                     .apply {
                         setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
                     }
             )
-
-        context
-            .testClass.orElse(null)
-            .let { it?.getDeclaredAnnotationsByType(Topic::class.java) ?: emptyArray() }
-            .map { NewTopic(it.topic, it.partitions, REPLICATION_FACTOR) }
-            .let(admin::createTopics)
-            .all()
-            .get()
-
-        admin.close()
     }
+
+    override fun beforeEach(context: ExtensionContext) {
+        val classAnnotation =
+            context
+                .testClass.orElse(null)
+                .let { it?.getDeclaredAnnotationsByType(Topic::class.java) ?: emptyArray() }
+
+        val methodAnnotation =
+            context
+                .testMethod.orElse(null)
+                .let { it?.getDeclaredAnnotationsByType(Topic::class.java) ?: emptyArray() }
+
+        admin.create(classAnnotation.toList() + methodAnnotation.toList())
+    }
+
+    override fun afterEach(context: ExtensionContext) {
+        consumersByTopic
+            .values
+            .forEach { it.close() }
+
+        consumersByTopic.clear()
+        admin.deleteAllTopics()
+    }
+
 
     override fun supportsParameter(parameterContext: ParameterContext, extensionContext: ExtensionContext): Boolean =
         parameterContext
@@ -165,13 +179,34 @@ class KafkaExtension : BeforeAllCallback, BeforeEachCallback, ParameterResolver 
             .apply { subscribe(listOf(config.topic)) }
             .let { kafkaConsumer -> TestConsumer(consumer = kafkaConsumer) }
 
-    override fun beforeEach(context: ExtensionContext) {
-        consumersByTopic
-            .values
-            .forEach { it.clear() }
-    }
-
     private fun bootstrapServers(): String =
         kafkaContainer.bootstrapServers
 }
+
+private fun Admin.create(topics: List<Topic>) {
+    // deleteTopic in previous test may result in topic create failure
+    var attempts = 10
+    while (attempts-- > 0) {
+        try {
+            topics
+                .map { NewTopic(it.topic, it.partitions, REPLICATION_FACTOR) }
+                .let(this::createTopics)
+                .all()
+                .get()
+
+            break
+        } catch (_: Exception) {
+            sleep(100)
+        }
+    }
+}
+
+private fun Admin.deleteAllTopics() =
+    listTopics()
+        .listings()
+        .get()
+        .map { it.name() }
+        .let(this::deleteTopics)
+        .all()
+        .get()
 
