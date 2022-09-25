@@ -1,6 +1,11 @@
 package io.vonsowic
 
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig
+import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig
+import io.confluent.kafka.serializers.KafkaAvroSerializerConfig
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.AdminClientConfig
@@ -12,6 +17,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.Producer
 import org.apache.kafka.clients.producer.ProducerConfig
+import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.jupiter.api.extension.*
@@ -28,6 +34,7 @@ import kotlin.reflect.KClass
 private const val TEST_CONSUMER_QUEUE_CAPACITY = 1000
 private val TEST_CONSUMER_POLL_DURATION = Duration.ofMillis(250)
 private const val REPLICATION_FACTOR: Short = 1
+private const val SCHEMA_REGISTRY_URL = "mock://schema.registry"
 
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.CLASS)
@@ -93,7 +100,8 @@ class KafkaExtension : BeforeAllCallback, BeforeEachCallback, AfterEachCallback,
 
     override fun beforeAll(context: ExtensionContext) {
         kafkaContainer.start()
-        System.setProperty("kafka.bootstrap.servers", bootstrapServers())
+        System.setProperty("kafka.${CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG}", bootstrapServers())
+        System.setProperty("kafka.${AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG}", SCHEMA_REGISTRY_URL)
 
         admin =
             AdminClient.create(
@@ -163,6 +171,7 @@ class KafkaExtension : BeforeAllCallback, BeforeEachCallback, AfterEachCallback,
                 props[ProducerConfig.BOOTSTRAP_SERVERS_CONFIG] = bootstrapServers()
                 props[ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG] = options.keySerializer.java
                 props[ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG] = options.valueSerializer.java
+                props[KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG] = SCHEMA_REGISTRY_URL
                 KafkaProducer<Any, Any>(props)
             }
 
@@ -174,6 +183,7 @@ class KafkaExtension : BeforeAllCallback, BeforeEachCallback, AfterEachCallback,
                 this[ConsumerConfig.AUTO_OFFSET_RESET_CONFIG] = "earliest"
                 this[ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG] = config.keyDeserializer.java
                 this[ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG] = config.valueDeserializer.java
+                this[KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG] = SCHEMA_REGISTRY_URL
             }
             .let { props -> KafkaConsumer<Any?, Any?>(props) }
             .apply { subscribe(listOf(config.topic)) }

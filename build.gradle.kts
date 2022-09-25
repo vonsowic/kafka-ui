@@ -42,6 +42,7 @@ dependencies {
 
     runtimeOnly("com.fasterxml.jackson.module:jackson-module-kotlin")
 
+    testImplementation("net.datafaker:datafaker:1.5.0")
     testImplementation("org.assertj:assertj-core:3.23.1")
     testImplementation("org.testcontainers:kafka:1.17.3")
 }

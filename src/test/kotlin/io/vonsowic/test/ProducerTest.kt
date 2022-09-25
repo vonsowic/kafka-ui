@@ -1,7 +1,8 @@
-package io.vonsowic
+package io.vonsowic.test
 
 import io.micronaut.http.HttpStatus
 import io.micronaut.http.client.annotation.Client
+import io.vonsowic.*
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.util.UUID

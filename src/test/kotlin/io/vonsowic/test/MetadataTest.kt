@@ -1,6 +1,9 @@
-package io.vonsowic
+package io.vonsowic.test
 
 import io.micronaut.http.HttpStatus
+import io.vonsowic.AppClient
+import io.vonsowic.IntegrationTest
+import io.vonsowic.Topic
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 

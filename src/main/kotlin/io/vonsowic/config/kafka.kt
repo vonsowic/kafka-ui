@@ -1,8 +1,13 @@
 package io.vonsowic.config
 
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient
+import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig
 import io.micronaut.context.annotation.Bean
 import io.micronaut.context.annotation.Factory
 import io.micronaut.context.annotation.Property
+import io.micronaut.context.annotation.Requires
 import io.vonsowic.KafkaEventPart
 import io.vonsowic.utils.AppConsumerOptions
 import io.vonsowic.utils.AppProducer
@@ -18,12 +23,17 @@ import reactor.kafka.sender.SenderOptions
 import java.util.*
 
 
+@Retention(AnnotationRetention.RUNTIME)
+@Target(AnnotationTarget.VALUE_PARAMETER)
+@Property(name = "kafka")
+annotation class KafkaProperties
+
 @Suppress("unused")
 @Factory
 class KafkaFactory {
 
     @Bean
-    fun consumerOptions(@Property(name = "kafka") config: Properties): AppConsumerOptions {
+    fun consumerOptions(@KafkaProperties config: Properties): AppConsumerOptions {
         val consumerProps = Properties()
         consumerProps.putAll(config)
         consumerProps[ConsumerConfig.CLIENT_ID_CONFIG] = "kafka-ui-${UUID.randomUUID()}"
@@ -36,7 +46,7 @@ class KafkaFactory {
     }
 
     @Singleton
-    fun kafkaProducer(@Property(name = "kafka") config: Properties): AppProducer {
+    fun kafkaProducer(@KafkaProperties config: Properties): AppProducer {
         val producerProps = Properties()
         producerProps.putAll(config)
         producerProps[ProducerConfig.CLIENT_ID_CONFIG] = "kafka-ui-main"
@@ -49,7 +59,16 @@ class KafkaFactory {
     }
 
     @Singleton
-    fun admin(@Property(name = "kafka") config: Properties): Admin {
+    fun admin(@KafkaProperties config: Properties): Admin {
         return Admin.create(config)
+    }
+
+    @Requires(configuration = AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG)
+    @Singleton
+    fun schemaRegistryClient(@KafkaProperties config: Properties): SchemaRegistryClient {
+        return config.getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG)
+            .takeIf { !it.startsWith("mock") }
+            ?.let { CachedSchemaRegistryClient(it, 500) }
+            ?: MockSchemaRegistryClient()
     }
 }
