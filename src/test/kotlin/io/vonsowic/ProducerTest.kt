@@ -1,18 +1,15 @@
 package io.vonsowic
 
-import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpStatus
-import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import reactor.core.publisher.Mono
 import java.util.UUID
 
 @IntegrationTest
 class ProducerTest(
     @Client("/")
-    private val httpClient: HttpClient
+    private val httpClient: AppClient
 ) {
 
     @Test
@@ -36,8 +33,7 @@ class ProducerTest(
                 )
             )
 
-        Mono.from(httpClient.exchange(HttpRequest.POST("/api/events", req)))
-            .block()
+        httpClient.sendEvent(req)
             .apply {
                 assertThat(status).isEqualTo(HttpStatus.OK)
             }

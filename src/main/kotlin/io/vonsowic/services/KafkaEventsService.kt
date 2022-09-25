@@ -2,24 +2,30 @@ package io.vonsowic.services
 
 import io.vonsowic.KafkaEvent
 import io.vonsowic.KafkaEventCreateReq
-import io.vonsowic.KafkaEventPart
+import io.vonsowic.utils.AppConsumer
+import io.vonsowic.utils.AppProducer
+import io.vonsowic.utils.completeOnIdleStream
 import jakarta.inject.Singleton
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.header.internals.RecordHeader
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
-import reactor.kafka.receiver.KafkaReceiver
-import reactor.kafka.sender.KafkaSender
 import reactor.kafka.sender.SenderRecord
 import java.time.Duration
-import java.time.Instant.now
 
-private val TICK_DURATION = Duration.ofMillis(100)
 
+data class PollOptions(
+    val topicOptions: Collection<PollOption>,
+    // if null, then stream is never closed on
+    val maxIdleTime: Duration? = null
+)
+data class PollOption(
+    val topicName: String,
+)
 @Singleton
 class KafkaEventsService(
-    private val kafkaProducer: KafkaSender<KafkaEventPart, KafkaEventPart>,
-    private val kafkaConsumer: KafkaReceiver<KafkaEventPart, KafkaEventPart>,
+    private val appProducer: AppProducer,
+    private val consumersPool: AppConsumersPool,
 ) {
 
     fun send(request: KafkaEventCreateReq): Mono<Void> =
@@ -27,14 +33,21 @@ class KafkaEventsService(
             .let(KafkaEventCreateReq::toSenderRecord)
             .let { SenderRecord.create(it, null) }
             .let { Mono.just(it) }
-            .let { kafkaProducer.send(it) }
+            .let { appProducer.send(it) }
             .doOnNext { println("record has been published to topic ${request.topic}") }
             .then()
 
-    fun poll(): Flux<KafkaEvent> =
-        kafkaConsumer
-            .receive()
-            .completeOnIdleStream(maxIdleTime = Duration.ofSeconds(1))
+    fun poll(options: PollOptions): Flux<KafkaEvent> =
+        consumersPool
+            .consumer(options.topicOptions)
+            .flatMapMany { it.receive() }
+            .let {
+                if (options.maxIdleTime != null) {
+                    it.completeOnIdleStream(maxIdleTime = options.maxIdleTime)
+                } else {
+                    it
+                }
+            }
             .map { record ->
                 KafkaEvent(
                     key = record.key(),
@@ -47,23 +60,6 @@ class KafkaEventsService(
             }
 
 
-}
-
-private fun <E> Flux<E>.completeOnIdleStream(maxIdleTime: Duration): Flux<E> {
-    var lastEvent = now()
-    return Flux.create { sink ->
-        val subscription =
-            this.doOnNext { lastEvent = now() }
-                .subscribe { sink.next(it) }
-
-        Flux.interval(Duration.ZERO, TICK_DURATION)
-            .filter { lastEvent + maxIdleTime < now() }
-            .take(1)
-            .subscribe {
-                subscription.dispose()
-                sink.complete()
-            }
-    }
 }
 
 private fun KafkaEventCreateReq.toSenderRecord() =
