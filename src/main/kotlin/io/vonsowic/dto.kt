@@ -29,7 +29,11 @@ data class KafkaEvent(
 data class KafkaEventPart(
     val data: Any?,
     val type: KafkaEventPartType
-)
+) {
+    companion object {
+        val NIL = KafkaEventPart(data = null, type = KafkaEventPartType.NIL)
+    }
+}
 
 enum class KafkaEventPartType {
     STRING,

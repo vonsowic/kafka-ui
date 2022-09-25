@@ -2,6 +2,8 @@ package io.vonsowic.services
 
 import io.vonsowic.KafkaEvent
 import io.vonsowic.KafkaEventCreateReq
+import io.vonsowic.KafkaEventPart
+import io.vonsowic.KafkaEventPartType
 import io.vonsowic.utils.AppConsumer
 import io.vonsowic.utils.AppProducer
 import io.vonsowic.utils.completeOnIdleStream
@@ -50,8 +52,8 @@ class KafkaEventsService(
             }
             .map { record ->
                 KafkaEvent(
-                    key = record.key(),
-                    value = record.value(),
+                    key = record?.key() ?: KafkaEventPart.NIL,
+                    value = record?.value() ?: KafkaEventPart.NIL,
                     headers = record.headers()
                         ?.filterNotNull()
                         ?.associate { header -> header.key() to (header.value()?.toString() ?: "") }

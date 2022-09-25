@@ -33,6 +33,26 @@ class ConsumerTest(
     }
 
     @Test
+    fun `should fetch Kafka event with null key and null value`(
+        @ProducerOptions
+        producer: Producer<String, String?>
+    ) {
+        producer.send(ProducerRecord(TEST_TOPIC, null, null)).get()
+
+        httpClient.fetchEvents(TEST_TOPIC)
+            .apply {
+                assertThat(status).isEqualTo(HttpStatus.OK)
+                assertThat(body()).hasSize(1)
+            }
+            .let { it.body()[0] }
+            .apply {
+                assertThat(key.type).isEqualTo(KafkaEventPartType.NIL)
+                assertThat(key.data).isNull()
+                assertThat(value.type).isEqualTo(KafkaEventPartType.NIL)
+                assertThat(value.data).isNull()
+            }
+    }
+    @Test
     fun `should fetch all Kafka events with key string and value string`(
         @ProducerOptions
         producer: Producer<String, String>
