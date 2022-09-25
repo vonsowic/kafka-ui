@@ -4,6 +4,7 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig.SCHEMA_REGIST
 import io.confluent.kafka.serializers.KafkaAvroDeserializer
 import io.vonsowic.KafkaEventPart
 import io.vonsowic.KafkaEventPartType
+import org.apache.kafka.common.errors.SerializationException
 import org.apache.kafka.common.serialization.Deserializer
 import org.apache.kafka.common.serialization.Serializer
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -31,18 +32,14 @@ class DelegatingDeserializer(
     private val stringDeserializer: StringDeserializer = StringDeserializer(),
     private var avroDeserializer: KafkaAvroDeserializer? = null,
 ) : Deserializer<KafkaEventPart> {
-    override fun deserialize(topic: String, data: ByteArray?): KafkaEventPart {
-        if (data == null) {
-            return KafkaEventPart(type = KafkaEventPartType.NIL, data = null)
-        }
-
+    override fun deserialize(topic: String, data: ByteArray): KafkaEventPart {
         if (avroDeserializer != null) {
             try {
                 return KafkaEventPart(
                     type = KafkaEventPartType.AVRO,
                     data = avroDeserializer!!.deserialize(topic, data)
                 )
-            } catch (_: Exception) {
+            } catch (_: SerializationException) {
             }
         }
 
