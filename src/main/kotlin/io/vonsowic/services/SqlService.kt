@@ -83,7 +83,7 @@ class SqlService(
                             .thenReturn(event)
                     }
                     .doOnNext {
-                        log.info("inserted record from topic $topic, partition: ${it.partition()}, offset: ${it.offset()}")
+                        log.debug("inserted record from topic $topic, partition: ${it.partition()}, offset: ${it.offset()}")
                     }
             }
             .subscribe()
@@ -99,14 +99,14 @@ class SqlService(
                 .map { get(it) }
         }
 
-    private fun createTable(table: String): Mono<Int> =
+    private fun createTable(table: String): Mono<Long> =
         db.connectionFactory().create().let { Mono.from(it) }
             .flatMap { conn ->
                 conn.createStatement(ddl(table))
                     .execute()
                     .let { Mono.from(it) }
             }
-            .thenReturn(1)
+            .flatMap { Mono.from(it.rowsUpdated) }
 
 
     private fun ddl(table: String): String {

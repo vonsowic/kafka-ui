@@ -45,7 +45,7 @@ class SqlTest(
                 .set("birthDate", Faker.instance().date().birthday().toInstant().toEpochMilli())
                 .set("favouriteAnimal", Faker.instance().animal().name())
                 .build()
-        val res = producer.send(ProducerRecord(PEOPLE_TOPIC, personId, person)).get()
+        producer.send(ProducerRecord(PEOPLE_TOPIC, personId, person)).get()
 
         val rows =
             httpClient
@@ -72,4 +72,54 @@ class SqlTest(
                 person["favouriteAnimal"],
             )
     }
+
+    @Topic(PEOPLE_TOPIC)
+    @Test
+    fun `should mirror Kafka topic only once - second call should not trigger second Kafka subscription`(
+        @ProducerOptions(valueSerializer = KafkaAvroSerializer::class)
+        producer: Producer<String, GenericData.Record>
+    ) {
+        val personId = UUID.randomUUID().toString()
+        val person =
+            GenericRecordBuilder(PeopleSchema)
+                .set("id", personId)
+                .set("firstName", Faker.instance().name().firstName())
+                .set("lastName", Faker.instance().name().lastName())
+                .set("birthDate", Faker.instance().date().birthday().toInstant().toEpochMilli())
+                .set("favouriteAnimal", Faker.instance().animal().name())
+                .build()
+        producer.send(ProducerRecord(PEOPLE_TOPIC, personId, person)).get()
+
+        httpClient
+            .expectStatus<List<SqlStatementRow>>(HttpStatus.OK) {
+                sql(SqlStatementReq("SELECT * FROM $PEOPLE_TOPIC"))
+            }
+
+        // execute for the second time
+        val rows =
+            httpClient
+                .expectStatus<List<SqlStatementRow>>(HttpStatus.OK) {
+                    sql(SqlStatementReq("SELECT * FROM $PEOPLE_TOPIC"))
+                }
+                .body()
+
+        assertThat(rows).hasSize(2)
+        assertThat(rows[0])
+            .contains(
+                "ID",
+                "FIRSTNAME",
+                "LASTNAME",
+                "BIRTHDATE",
+                "FAVOURITEANIMAL",
+            )
+        assertThat(rows[1])
+            .contains(
+                person["id"],
+                person["firstName"],
+                person["lastName"],
+                person["birthDate"],
+                person["favouriteAnimal"],
+            )
+    }
+
 }
