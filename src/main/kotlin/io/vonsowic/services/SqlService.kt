@@ -21,6 +21,8 @@ import org.apache.avro.generic.GenericData
 
 
 private val log = LoggerFactory.getLogger(SqlService::class.java)
+private val WHITESPACE_REGEX = Regex("\\s")
+private val KEYWORDS_BEFORE_TABLE_NAME = listOf("FROM", "JOIN")
 
 @Singleton
 class SqlService(
@@ -59,7 +61,6 @@ class SqlService(
 
     private fun mirrorTopic(topic: String) {
         createTable(topic)
-//            .publishOn(Schedulers.newParallel("db"))
             .doOnNext {
                 log.info("Table for topic $topic has been created. Number of rows updated: $it")
             }
@@ -91,7 +92,12 @@ class SqlService(
     }
 
     private fun extractTables(req: SqlStatementReq): Collection<String> =
-        listOf("peopletest")
+        with(req.sql.split(WHITESPACE_REGEX)) {
+            withIndex()
+                .filter { KEYWORDS_BEFORE_TABLE_NAME.contains(it.value.uppercase()) }
+                .map { it.index + 1 }
+                .map { get(it) }
+        }
 
     private fun createTable(table: String): Mono<Int> =
         db.connectionFactory().create().let { Mono.from(it) }
