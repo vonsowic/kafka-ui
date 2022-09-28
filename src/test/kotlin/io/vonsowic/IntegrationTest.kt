@@ -39,7 +39,7 @@ private const val SCHEMA_REGISTRY_URL = "http://localhost:8081"
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.CLASS)
 @ExtendWith(KafkaExtension::class)
-@MicronautTest
+@MicronautTest(transactional = false)
 annotation class IntegrationTest
 
 @Retention(AnnotationRetention.RUNTIME)

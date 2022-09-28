@@ -1,15 +1,33 @@
 package io.vonsowic.services
 
-import io.r2dbc.pool.ConnectionPool
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient
+import io.micronaut.data.r2dbc.operations.R2dbcOperations
+import io.r2dbc.spi.Result
+import io.vonsowic.KafkaEventPart
+import io.vonsowic.KafkaEventPartType
+import io.vonsowic.KafkaEventPartType.*
 import io.vonsowic.SqlStatementReq
 import io.vonsowic.SqlStatementRow
+import io.vonsowic.utils.ClientException
 import jakarta.inject.Singleton
+import org.slf4j.LoggerFactory
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
+import io.vonsowic.utils.AppEvent
+import org.apache.avro.Schema
+import org.apache.avro.Schema.Parser
+import org.apache.avro.generic.GenericData
+
+
+private val log = LoggerFactory.getLogger(SqlService::class.java)
 
 @Singleton
 class SqlService(
-    private val connectionPool: ConnectionPool
+    private val metadataService: MetadataService,
+    private val db: R2dbcOperations,
+    private val schemaRegistryClient: SchemaRegistryClient,
+    private val eventsService: KafkaEventsService
 ) {
 
     /**
@@ -17,28 +35,187 @@ class SqlService(
      * following rows contain values
      */
     fun executeSqlStatement(req: SqlStatementReq): Flux<SqlStatementRow> =
-        Flux.fromIterable(extractTables(req))
-            .flatMap(::createTableIfNotExists)
-            .map { listOf<Any>() }
+        init(req)
+            .thenReturn(1)
+            .doOnNext { Thread.sleep(500) }
+            .thenMany(select(req))
 
+    private fun init(req: SqlStatementReq): Mono<Void> =
+        // verify if requested topics exist
+        metadataService.listTopics()
+            .map { it.name }
+            .collectList()
+            .map { it.toSet() }
+            .map { topics ->
+                val tables = extractTables(req)
+                val notExistingTopics = tables.filter { !topics.contains(it) }
+                if (notExistingTopics.isEmpty()) tables
+                else throw ClientException("Following topics does not exist: $notExistingTopics")
+            }
+            .flatMapMany { Flux.fromIterable(it) }
+            // stream topics to db
+            .doOnNext(::mirrorTopic)
+            .then()
+
+    private fun mirrorTopic(topic: String) {
+        createTable(topic)
+//            .publishOn(Schedulers.newParallel("db"))
+            .doOnNext {
+                log.info("Table for topic $topic has been created. Number of rows updated: $it")
+            }
+            .then(db.connectionFactory().create().let { Mono.from(it) })
+            .flatMapMany { conn ->
+                eventsService
+                    .poll(
+                        PollOptions(
+                            topicOptions = listOf(
+                                PollOption(
+                                    topicName = topic
+                                )
+                            ),
+                        )
+                    )
+                    .flatMap { event ->
+                        conn.createStatement(toInsertStatement(event))
+                            .execute()
+                            .let { Mono.from(it) }
+                            .thenReturn(event)
+                    }
+                    .doOnNext {
+                        log.info("inserted record from topic $topic, partition: ${it.partition()}, offset: ${it.offset()}")
+                    }
+            }
+            .subscribe()
+
+        log.info("Started streaming data from topic $topic to db")
+    }
 
     private fun extractTables(req: SqlStatementReq): Collection<String> =
-        listOf()
+        listOf("peopletest")
 
-    private fun createTableIfNotExists(table: String): Mono<String> =
-        tableExists(table)
-            .flatMap { exists ->
-                if (exists) {
-                    Mono.just(table)
-                } else {
-                    createTable(table).thenReturn(table)
+    private fun createTable(table: String): Mono<Int> =
+        db.connectionFactory().create().let { Mono.from(it) }
+            .flatMap { conn ->
+                conn.createStatement(ddl(table))
+                    .execute()
+                    .let { Mono.from(it) }
+            }
+            .thenReturn(1)
+
+
+    private fun ddl(table: String): String {
+        val columns = mutableListOf<String>()
+        columns += "__partition INTEGER"
+        columns += "__offset BIGINT"
+
+        schemaRegistryClient
+            .runCatching { getLatestSchemaMetadata("$table-key") }
+            .getOrNull()
+            ?.let(::ddl)
+            ?.run(columns::addAll)
+
+        schemaRegistryClient
+            .runCatching { getLatestSchemaMetadata("$table-value") }
+            .getOrNull()
+            ?.let(::ddl)
+            ?.filter { !columns.contains(it) }
+            ?.run(columns::addAll)
+
+        return "CREATE TABLE IF NOT EXISTS $table ( ${columns.joinToString(separator = ",")} )"
+    }
+
+    private fun ddl(schemaMetadata: SchemaMetadata): Collection<String> =
+        schemaMetadata
+            .schema
+            .let { Parser().parse(it) }
+            .let { schema ->
+                schema.fields.map { field ->
+                    "${field.name()} ${avroToDbType(field)}"
                 }
             }
 
-    private fun tableExists(table: String): Mono<Boolean> =
-        connectionPool
-            .create()
-            .map { false }
+    private fun avroToDbType(field: Schema.Field): String =
+        when (val type = field.schema().type ?: throw Exception("Field schema type cannot be null")) {
+            Schema.Type.RECORD -> TODO()
+            Schema.Type.ENUM -> TODO()
+            Schema.Type.ARRAY -> TODO()
+            Schema.Type.MAP -> TODO()
+            Schema.Type.UNION ->
+                if (field.schema().isNullable) {
+                    avroToDbType(field.schema().types.find { !it.isNullable }!!.type)
+                } else {
+                    TODO()
+                }
+            Schema.Type.FIXED -> TODO()
+            Schema.Type.BYTES -> TODO()
+            Schema.Type.FLOAT -> TODO()
+            Schema.Type.DOUBLE -> TODO()
+            Schema.Type.BOOLEAN -> TODO()
+            Schema.Type.NULL -> TODO()
+            else -> avroToDbType(type)
+        }
 
-    private fun createTable(table: String): Mono<Boolean> = Mono.just(true)
+    private fun avroToDbType(type: Schema.Type): String =
+        when (type) {
+            Schema.Type.STRING -> "VARCHAR(10000)"
+            Schema.Type.INT -> "INTEGER"
+            Schema.Type.LONG -> "BIGINT"
+            else -> throw Exception("Unhandled type: $type")
+        }
+
+    private fun toInsertStatement(event: AppEvent): String {
+        val valueColumns = eventColumns(event.value())
+        val fields = "__partition, __offset, " + valueColumns.columns.joinToString(", ")
+        val values = "${event.partition()}, ${event.offset()}, " + valueColumns.rows.joinToString(", ")
+        return """
+            INSERT INTO ${event.topic()} ($fields)
+            VALUES ($values)
+        """.trimIndent()
+    }
+
+    private fun eventColumns(event: KafkaEventPart): DbEvent =
+        when (event.type) {
+            STRING -> TODO()
+            AVRO ->
+                with(event.data as GenericData.Record) {
+                    val columns = schema.fields.map { it.name() }
+                    DbEvent(
+                        columns = columns,
+                        rows = columns.map { "'${get(it)}'" }
+                    )
+                }
+            NIL -> DbEvent(columns = listOf(), rows = listOf())
+        }
+
+    private fun select(req: SqlStatementReq): Flux<SqlStatementRow> =
+        db.connectionFactory().create().let { Mono.from(it) }
+            .flatMap { conn ->
+                conn.createStatement(req.sql)
+                    .execute()
+                    .let { Mono.from(it) }
+            }
+            .flatMapMany(::toRow)
+
+    private fun toRow(result: Result): Flux<SqlStatementRow> {
+        var isFirstRow = true
+        return Flux.create { sink ->
+            Flux.from(result.map { row, _ -> row })
+                .doOnComplete { sink.complete() }
+                .doOnError { sink.error(it) }
+                .subscribe { row ->
+                    val columns = row.metadata.columnMetadatas.map { it.name }
+                    if (isFirstRow) {
+                        isFirstRow = false
+                        sink.next(columns)
+                    }
+
+                    sink.next(columns.map { row[it] })
+                }
+        }
+    }
+
+    data class DbEvent(
+        val columns: List<String>,
+        val rows: List<Any?>
+    )
 }

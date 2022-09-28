@@ -1,22 +1,23 @@
 package io.vonsowic.services
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient
-import io.vonsowic.KafkaEvent
 import io.vonsowic.KafkaEventCreateReq
 import io.vonsowic.KafkaEventPart
 import io.vonsowic.KafkaEventPartType
+import io.vonsowic.utils.AppEvent
 import io.vonsowic.utils.AppException
 import io.vonsowic.utils.AppProducer
 import io.vonsowic.utils.completeOnIdleStream
 import jakarta.inject.Singleton
 import org.apache.avro.Schema
-import org.apache.avro.SchemaBuilder
 import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericRecordBuilder
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.header.internals.RecordHeader
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
+import reactor.kafka.receiver.ReceiverRecord
 import reactor.kafka.sender.SenderRecord
 import java.time.Duration
 import java.util.*
@@ -47,7 +48,7 @@ class KafkaEventsService(
             .doOnNext { println("record has been published to topic ${request.topic}") }
             .then()
 
-    fun poll(options: PollOptions): Flux<KafkaEvent> =
+    fun poll(options: PollOptions): Flux<AppEvent> =
         consumersPool
             .consumer(options.topicOptions)
             .flatMapMany { it.receive() }
@@ -58,16 +59,27 @@ class KafkaEventsService(
                     it
                 }
             }
-            .map { record ->
-                KafkaEvent(
-                    key = record?.key() ?: KafkaEventPart.NIL,
-                    value = record?.value() ?: KafkaEventPart.NIL,
-                    headers = record.headers()
-                        ?.filterNotNull()
-                        ?.associate { header -> header.key() to (header.value()?.toString() ?: "") }
-                        ?: mapOf()
+            .map {
+                ReceiverRecord(
+                    with(it) {
+                        ConsumerRecord(
+                            topic(),
+                            partition(),
+                            offset(),
+                            timestamp(),
+                            timestampType(),
+                            0L,
+                            serializedKeySize(),
+                            serializedValueSize(),
+                            key() ?: KafkaEventPart.NIL,
+                            value() ?: KafkaEventPart.NIL,
+                            headers()
+                        )
+                    },
+                    it.receiverOffset()
                 )
             }
+
 
     private fun KafkaEventCreateReq.toSenderRecord() =
         ProducerRecord(

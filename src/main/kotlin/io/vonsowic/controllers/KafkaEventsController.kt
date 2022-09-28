@@ -42,11 +42,14 @@ class KafkaEventsController(
                     maxIdleTime = Duration.ofSeconds(1)
                 )
             )
-            .map {
+            .map { record ->
                 KafkaEvent(
-                    key = it.key.toMapIfAvro(),
-                    value = it.value.toMapIfAvro(),
-                    headers = it.headers,
+                    key = record.key().toMapIfAvro(),
+                    value = record.value().toMapIfAvro(),
+                    headers = record.headers()
+                        ?.filterNotNull()
+                        ?.associate { header -> header.key() to (header.value()?.toString() ?: "") }
+                        ?: mapOf()
                 )
             }
 }

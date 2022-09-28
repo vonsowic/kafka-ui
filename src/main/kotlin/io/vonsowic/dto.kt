@@ -6,17 +6,9 @@ data class SqlStatementReq(
 
 typealias SqlStatementRow = List<Any?>
 
-enum class KafkaEventCreateStrategy {
-    // create event as is
-    SIMPLE,
-    // generate value based on provided type
-    AUTOGENERATE
-}
-
 data class KafkaEventCreateReq(
     val topic: String,
     val partition: Int? = null,
-    val strategy: KafkaEventCreateStrategy = KafkaEventCreateStrategy.SIMPLE,
     val event: KafkaEvent? = null
 )
 
@@ -27,11 +19,11 @@ data class KafkaEvent(
 )
 
 data class KafkaEventPart(
-    val data: Any?,
+    val data: Any,
     val type: KafkaEventPartType
 ) {
     companion object {
-        val NIL = KafkaEventPart(data = null, type = KafkaEventPartType.NIL)
+        val NIL = KafkaEventPart(data = 0, type = KafkaEventPartType.NIL)
     }
 }
 

@@ -1,14 +1,11 @@
 package io.vonsowic.services
 
 import io.micronaut.context.BeanProvider
-import io.vonsowic.KafkaEventPart
 import io.vonsowic.utils.AppConsumer
 import io.vonsowic.utils.AppConsumerOptions
 import jakarta.inject.Singleton
-import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
 import reactor.core.publisher.Mono
-import reactor.core.publisher.toMono
 import reactor.kafka.receiver.KafkaReceiver
 
 @Singleton

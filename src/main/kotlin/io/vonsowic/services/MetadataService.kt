@@ -16,6 +16,11 @@ class MetadataService(
     private val admin: Admin
 ) {
 
+    private fun exists(topicName: String): Mono<Boolean> =
+        listTopics()
+            .count()
+            .map { it > 0 }
+
     fun listTopics(): Flux<ListTopicItem> =
         admin
             .listTopics()
@@ -27,6 +32,7 @@ class MetadataService(
                 )
             }
 
+    fun topicMetadata(topic: String): Mono<TopicMetadata> = topicsMetadata(listOf(topic)).single()
 
     fun topicsMetadata(topics: Collection<String>): Flux<TopicMetadata> =
         admin.describeTopics(topics)

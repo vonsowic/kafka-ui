@@ -4,7 +4,6 @@ import io.micronaut.http.MediaType
 import io.micronaut.http.annotation.Body
 import io.micronaut.http.annotation.Controller
 import io.micronaut.http.annotation.Post
-import io.vonsowic.KafkaEvent
 import io.vonsowic.SqlStatementReq
 import io.vonsowic.SqlStatementRow
 import io.vonsowic.services.SqlService
@@ -13,7 +12,7 @@ import reactor.core.publisher.Flux
 @Suppress("unused")
 @Controller("/api/sql")
 class SqlController(
-    private val sqlService: SqlService
+    private val sqlService: SqlService,
 ) {
 
 
