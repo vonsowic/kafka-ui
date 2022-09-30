@@ -31,4 +31,15 @@ class MetadataTest(
             assertThat(body()).hasSize(3)
         }
     }
+
+    @Topic(topic = "topic-1", partitions = 3)
+    @Test
+    fun `should describe topic`() {
+        with(httpClient.describeTopic("topic-1")) {
+            assertThat(status).isEqualTo(HttpStatus.OK)
+            val topicDescription = body()
+            assertThat(topicDescription.name).isEqualTo("topic-1")
+            assertThat(topicDescription.partitions).hasSize(3)
+        }
+    }
 }
