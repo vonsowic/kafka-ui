@@ -2,7 +2,7 @@ import { assertExpressionStatement } from "@babel/types";
 import { useEffect, useState } from "react";
 import Axios from 'axios'
 import { Link } from "react-router-dom";
-import { Button, Input, List } from 'semantic-ui-react'
+import { Button, Input, List, Radio } from 'semantic-ui-react'
 
 interface Topic {
   name: string
@@ -20,9 +20,13 @@ function TopicList() {
   return (
     <div>
       <Input icon='search' placeholder='Search...' onChange={e => setTopicFilter(e.target.value)} />
-      <Button toggle active={includeTechnical} onClick={() => setIncludeTechnical(!includeTechnical)}>
-        Include technical
-      </Button>
+      <Radio
+          label='Include technical'
+          toggle 
+          active={includeTechnical} 
+          onClick={() => setIncludeTechnical(!includeTechnical)}>
+        
+      </Radio>
       <List>
         {
           topics.filter(topic => topic.name.includes(topicFilter))

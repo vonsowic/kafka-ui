@@ -1,6 +1,16 @@
 micronaut:
   application:
     name: kafka-ui
+  router:
+    static-resources:
+      main-page:
+        mapping: /
+        paths:
+          - file:ui/build/index.html
+      static:
+        paths:
+         - file:ui/build
+
 netty:
   default:
     allocator:
