@@ -51,7 +51,7 @@ class KafkaEventsService(
     fun poll(options: PollOptions): Flux<AppEvent> =
         consumersPool
             .consumer(options.topicOptions)
-            .flatMapMany { it.receive() }
+            .receive()
             .let {
                 if (options.maxIdleTime != null) {
                     it.completeOnIdleStream(maxIdleTime = options.maxIdleTime)

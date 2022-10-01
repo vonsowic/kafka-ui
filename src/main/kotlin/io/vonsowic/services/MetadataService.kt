@@ -5,10 +5,8 @@ import io.vonsowic.PartitionMetadata
 import io.vonsowic.TopicMetadata
 import jakarta.inject.Singleton
 import org.apache.kafka.clients.admin.Admin
-import org.apache.kafka.common.TopicPartitionInfo
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
-import java.util.UUID
+import org.apache.kafka.clients.admin.OffsetSpec
+import org.apache.kafka.common.TopicPartition
 
 
 @Singleton
@@ -16,40 +14,55 @@ class MetadataService(
     private val admin: Admin
 ) {
 
-    private fun exists(topicName: String): Mono<Boolean> =
-        listTopics()
-            .count()
-            .map { it > 0 }
+    private fun exists(topicName: String): Boolean =
+        listTopics().find { it.name === topicName } != null
 
-    fun listTopics(): Flux<ListTopicItem> =
+    fun listTopics(): Collection<ListTopicItem> =
         admin
             .listTopics()
-            .let { Mono.fromCallable { it.listings().get() } }
-            .flatMapIterable { it }
-            .map {
-                ListTopicItem(
-                    name = it.name()
-                )
+            .listings()
+            .get()
+            .map { topicListing ->
+                ListTopicItem(name = topicListing.name())
             }
 
-    fun topicMetadata(topic: String): Mono<TopicMetadata> = topicsMetadata(listOf(topic)).single()
+    fun topicMetadata(topic: String): TopicMetadata? = topicsMetadata(listOf(topic)).firstOrNull()
 
-    fun topicsMetadata(topics: Collection<String>): Flux<TopicMetadata> =
+    fun topicsMetadata(topics: Collection<String>): List<TopicMetadata> =
         admin.describeTopics(topics)
             .allTopicNames()
-            .let { Mono.fromCallable { it.get() } }
-            .flatMapIterable { it.values }
-            .map { topicDescriptor ->
-                with(topicDescriptor!!) {
+            .get()
+            .let { topicToDescMap ->
+                val topicsPartitions =
+                    topicToDescMap
+                        .values
+                        .flatMap { topicDesc ->
+                            topicDesc.partitions().map { TopicPartition(topicDesc.name(), it.partition()) }
+                        }
+
+                val earliestOffsets =
+                    admin.listOffsets(topicsPartitions.associateWith { OffsetSpec.earliest() })
+                        .all()
+                        .get()
+
+                val latestOffsets =
+                    admin.listOffsets(topicsPartitions.associateWith { OffsetSpec.latest() })
+                        .all()
+                        .get()
+
+                topicToDescMap.keys.map { topicName ->
                     TopicMetadata(
-                        name = name(),
-                        partitions = partitions().map(::toMetadata)
+                        name = topicName,
+                        partitions = topicToDescMap[topicName]!!.partitions()
+                            .map { topicPartitionInfo ->
+                                val partition = topicPartitionInfo.partition()
+                                PartitionMetadata(
+                                    id = partition,
+                                    earliestOffset = earliestOffsets[TopicPartition(topicName, partition)]!!.offset(),
+                                    latestOffset = latestOffsets[TopicPartition(topicName, partition)]!!.offset()
+                                )
+                            }
                     )
                 }
             }
-
-    private fun toMetadata(partition: TopicPartitionInfo): PartitionMetadata =
-        PartitionMetadata(
-            id = partition.partition()
-        )
 }

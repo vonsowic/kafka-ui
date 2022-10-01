@@ -5,7 +5,6 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient
 import io.micronaut.data.r2dbc.operations.R2dbcOperations
 import io.r2dbc.spi.Result
 import io.vonsowic.KafkaEventPart
-import io.vonsowic.KafkaEventPartType
 import io.vonsowic.KafkaEventPartType.*
 import io.vonsowic.SqlStatementReq
 import io.vonsowic.SqlStatementRow
@@ -32,32 +31,47 @@ class SqlService(
     private val eventsService: KafkaEventsService
 ) {
 
+    val mirroredTopics = mutableMapOf<String, Map<Long, MirroredPartition>>()
+
+    data class MirroredPartition(
+        val startingOffset: Long,
+        var currentOffset: Long
+    )
+
     /**
      * first row contains column names
      * following rows contain values
      */
     fun executeSqlStatement(req: SqlStatementReq): Flux<SqlStatementRow> =
-        init(req)
-            .thenReturn(1)
-            .doOnNext { Thread.sleep(500) }
-            .thenMany(select(req))
+        with(extractTables(req)) {
+            init(this)
+                .then(Mono.create<Void> {
+                    // send complete signal when initial select is completed
+                    while (true) {
 
-    private fun init(req: SqlStatementReq): Mono<Void> =
+                        it.success()
+                        return@create
+                    }
+                })
+                .thenMany(select(req))
+        }
+
+
+    private fun init(tables: Collection<String>): Mono<Void> =
         // verify if requested topics exist
         metadataService.listTopics()
             .map { it.name }
-            .collectList()
-            .map { it.toSet() }
-            .map { topics ->
-                val tables = extractTables(req)
+            .let { topics ->
                 val notExistingTopics = tables.filter { !topics.contains(it) }
-                if (notExistingTopics.isEmpty()) tables
-                else throw ClientException("Following topics does not exist: $notExistingTopics")
+                if (notExistingTopics.isNotEmpty()) {
+                    throw ClientException("Following topics does not exist: $notExistingTopics")
+                }
+
+                topics.forEach { topic ->
+                    mirrorTopic(topic)
+                }
             }
-            .flatMapMany { Flux.fromIterable(it) }
-            // stream topics to db
-            .doOnNext(::mirrorTopic)
-            .then()
+            .let { Mono.empty() }
 
     private fun mirrorTopic(topic: String) {
         createTable(topic)
@@ -99,15 +113,16 @@ class SqlService(
                 .map { get(it) }
         }
 
-    private fun createTable(table: String): Mono<Long> =
-        db.connectionFactory().create().let { Mono.from(it) }
+    private fun createTable(table: String): Mono<Void> =
+        db.connectionFactory()
+            .create()
+            .let { Mono.from(it) }
             .flatMap { conn ->
                 conn.createStatement(ddl(table))
                     .execute()
                     .let { Mono.from(it) }
             }
-            .flatMap { Mono.from(it.rowsUpdated) }
-
+            .then()
 
     private fun ddl(table: String): String {
         val columns = mutableListOf<String>()
@@ -127,7 +142,7 @@ class SqlService(
             ?.filter { !columns.contains(it) }
             ?.run(columns::addAll)
 
-        return "CREATE TABLE IF NOT EXISTS $table ( ${columns.joinToString(separator = ",")} )"
+        return "CREATE TABLE $table ( ${columns.joinToString(separator = ",")} )"
     }
 
     private fun ddl(schemaMetadata: SchemaMetadata): Collection<String> =

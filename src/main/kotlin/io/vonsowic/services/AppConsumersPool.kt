@@ -14,18 +14,17 @@ class AppConsumersPool(
     private val metadataService: MetadataService
 ) {
 
-    fun consumer(topics: Collection<PollOption>): Mono<AppConsumer> =
+    fun consumer(topics: Collection<PollOption>): AppConsumer =
         metadataService
             .topicsMetadata(topics.map { it.topicName })
-            .concatMapIterable { topicMetadata ->
+            .flatMap { topicMetadata ->
                 topicMetadata
                     .partitions
                     .map { partition ->
                         TopicPartition(topicMetadata.name, partition.id)
                     }
             }
-            .collectList()
-            .map { topicPartitions ->
+            .let { topicPartitions ->
                 KafkaReceiver.create(optionsProvider.get().assignment(topicPartitions))
             }
 }

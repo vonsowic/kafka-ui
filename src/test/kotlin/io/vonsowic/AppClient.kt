@@ -6,6 +6,7 @@ import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
 import io.micronaut.http.annotation.Body
 import io.micronaut.http.annotation.Get
+import io.micronaut.http.annotation.PathVariable
 import io.micronaut.http.annotation.Post
 import io.micronaut.http.client.DefaultHttpClientConfiguration
 import io.micronaut.http.client.exceptions.HttpClientResponseException
@@ -32,6 +33,10 @@ interface AppClient {
 
     @Get("/topics")
     fun listTopics(): HttpResponse<List<ListTopicItem>>
+
+    @Get("/topics/{topic}")
+    fun describeTopic(@PathVariable topic: String): HttpResponse<TopicMetadata>
+
 
     @Post("/sql")
     fun sql(@Body req: SqlStatementReq): HttpResponse<List<SqlStatementRow>>

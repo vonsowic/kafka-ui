@@ -1,13 +1,10 @@
 package io.vonsowic.test
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import io.confluent.kafka.serializers.KafkaAvroSerializer
 import io.micronaut.http.HttpStatus
 import io.vonsowic.*
-import jakarta.inject.Inject
 import net.datafaker.Faker
 import org.apache.avro.generic.GenericData
-import org.apache.avro.generic.GenericRecord
 import org.apache.avro.generic.GenericRecordBuilder
 import org.apache.kafka.clients.producer.Producer
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -21,7 +18,6 @@ const val TEST_TOPIC = "test-topic"
 @IntegrationTest
 class ConsumerTest(
     private val httpClient: AppClient,
-    private val objectMapper: ObjectMapper
 ) {
 
     @Test
@@ -47,9 +43,9 @@ class ConsumerTest(
             .let { it.body()[0] }
             .apply {
                 assertThat(key.type).isEqualTo(KafkaEventPartType.NIL)
-                assertThat(key.data).isNull()
+                assertThat(key.data).isEqualTo(0)
                 assertThat(value.type).isEqualTo(KafkaEventPartType.NIL)
-                assertThat(value.data).isNull()
+                assertThat(value.data).isEqualTo(0)
             }
     }
     @Test

@@ -34,7 +34,9 @@ enum class KafkaEventPartType {
 }
 
 data class PartitionMetadata(
-    val id: Int
+    val id: Int,
+    val earliestOffset: Long,
+    val latestOffset: Long
 )
 
 data class TopicMetadata(
