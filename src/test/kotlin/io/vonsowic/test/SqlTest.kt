@@ -71,7 +71,7 @@ class SqlTest(
         val rows =
             httpClient
                 .expectStatus<List<SqlStatementRow>>(HttpStatus.OK) {
-                    sql(SqlStatementReq("SELECT * FROM sqltestpeopletest2"))
+                    sql(SqlStatementReq("SELECT * FROM `sqltestpeopletest2`"))
                 }
                 .body()
 

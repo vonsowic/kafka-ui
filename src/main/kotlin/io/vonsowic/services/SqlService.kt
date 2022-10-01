@@ -137,10 +137,12 @@ class SqlService(
 
     private fun extractTables(req: SqlStatementReq): Collection<String> =
         with(req.sql.split(WHITESPACE_REGEX)) {
-            withIndex()
+            asSequence()
+                .withIndex()
                 .filter { it.value.uppercase() in KEYWORDS_BEFORE_TABLE_NAME }
                 .map { it.index + 1 }
                 .map { get(it) }
+                .map { it.removePrefix("`").removeSuffix("`") }.toList()
         }
 
     private fun createTable(table: String): Mono<Void> =
