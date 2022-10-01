@@ -31,53 +31,81 @@ class SqlService(
     private val eventsService: KafkaEventsService
 ) {
 
-    val mirroredTopics = mutableMapOf<String, Map<Long, MirroredPartition>>()
+    private val mirroredTopics = mutableMapOf<String, Map<Int, MirroredPartition>>()
 
     data class MirroredPartition(
         val startingOffset: Long,
         var currentOffset: Long
     )
 
+    private fun Map<Int, MirroredPartition>.isMirrored(): Boolean =
+        values.all { mirroredPartition ->
+            with(mirroredPartition) {
+                currentOffset >= startingOffset
+            }
+        }
+
     /**
      * first row contains column names
      * following rows contain values
      */
     fun executeSqlStatement(req: SqlStatementReq): Flux<SqlStatementRow> =
-        with(extractTables(req)) {
-            init(this)
-                .then(Mono.create<Void> {
-                    // send complete signal when initial select is completed
-                    while (true) {
+        extractTables(req)
+            .let { tables ->
+                init(tables)
+                    .then(Mono.create<Void> { sink ->
+                        // wait until all tables are mirrored
+                        // send complete signal when initial select is completed
+                        while (true) {
+                            val x = this
+                            val allRequestedTablesMirrored =
+                                tables.map { mirroredTopics[it] }
+                                    .all { it?.isMirrored() ?: false }
 
-                        it.success()
-                        return@create
-                    }
-                })
-                .thenMany(select(req))
-        }
+                            if (allRequestedTablesMirrored) {
+                                sink.success()
+                                return@create
+                            }
+                        }
+                    })
+                    .thenMany(select(req))
+            }
 
 
     private fun init(tables: Collection<String>): Mono<Void> =
         // verify if requested topics exist
-        metadataService.listTopics()
-            .map { it.name }
+        metadataService.topicsMetadata(tables)
             .let { topics ->
-                val notExistingTopics = tables.filter { !topics.contains(it) }
+                val notExistingTopics =
+                    tables.filter { table ->
+                        topics.find { table == it.name } == null
+                    }
+
                 if (notExistingTopics.isNotEmpty()) {
                     throw ClientException("Following topics does not exist: $notExistingTopics")
                 }
 
-                topics.forEach { topic ->
-                    mirrorTopic(topic)
-                }
+                topics
+                    .asSequence()
+                    .filter { it.name !in mirroredTopics }
+                    .forEach { topicMetadata ->
+                        mirroredTopics[topicMetadata.name] =
+                            topicMetadata.partitions
+                                .associate {
+                                    it.id to MirroredPartition(
+                                        startingOffset = it.latestOffset -1,
+                                        currentOffset = -1
+                                    )
+                                }
+
+                        mirrorTopic(topicMetadata.name)
+                    }
             }
             .let { Mono.empty() }
 
     private fun mirrorTopic(topic: String) {
         createTable(topic)
-            .doOnNext {
-                log.info("Table for topic $topic has been created. Number of rows updated: $it")
-            }
+            .doOnNext { log.info("Table for topic $topic has been created") }
             .then(db.connectionFactory().create().let { Mono.from(it) })
             .flatMapMany { conn ->
                 eventsService
@@ -90,7 +118,11 @@ class SqlService(
                             ),
                         )
                     )
+                    .doOnNext {
+                        mirroredTopics[it.topic()]!![it.partition()]!!.currentOffset = it.offset()
+                    }
                     .flatMap { event ->
+                        val x = this
                         conn.createStatement(toInsertStatement(event))
                             .execute()
                             .let { Mono.from(it) }
@@ -108,7 +140,7 @@ class SqlService(
     private fun extractTables(req: SqlStatementReq): Collection<String> =
         with(req.sql.split(WHITESPACE_REGEX)) {
             withIndex()
-                .filter { KEYWORDS_BEFORE_TABLE_NAME.contains(it.value.uppercase()) }
+                .filter { it.value.uppercase() in KEYWORDS_BEFORE_TABLE_NAME }
                 .map { it.index + 1 }
                 .map { get(it) }
         }
@@ -123,6 +155,7 @@ class SqlService(
                     .let { Mono.from(it) }
             }
             .then()
+
 
     private fun ddl(table: String): String {
         val columns = mutableListOf<String>()

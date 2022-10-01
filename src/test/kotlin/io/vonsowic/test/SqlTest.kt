@@ -14,8 +14,6 @@ import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import java.util.*
 
-const val PEOPLE_TOPIC = "peopletest"
-
 @IntegrationTest
 class SqlTest(
     @Inject
@@ -30,27 +28,19 @@ class SqlTest(
         assertThat(res.status).isEqualTo(HttpStatus.BAD_REQUEST)
     }
 
-    @Topic(PEOPLE_TOPIC)
+    @Topic("sqltestpeopletest1")
     @Test
     fun `should return rows representing Kafka events`(
         @ProducerOptions(valueSerializer = KafkaAvroSerializer::class)
         producer: Producer<String, GenericData.Record>
     ) {
-        val personId = UUID.randomUUID().toString()
-        val person =
-            GenericRecordBuilder(PeopleSchema)
-                .set("id", personId)
-                .set("firstName", Faker.instance().name().firstName())
-                .set("lastName", Faker.instance().name().lastName())
-                .set("birthDate", Faker.instance().date().birthday().toInstant().toEpochMilli())
-                .set("favouriteAnimal", Faker.instance().animal().name())
-                .build()
-        producer.send(ProducerRecord(PEOPLE_TOPIC, personId, person)).get()
+        val person = randomPerson()
+        producer.send(ProducerRecord("sqltestpeopletest1", person.get("id") as String, person)).get()
 
         val rows =
             httpClient
                 .expectStatus<List<SqlStatementRow>>(HttpStatus.OK) {
-                    sql(SqlStatementReq("SELECT * FROM $PEOPLE_TOPIC"))
+                    sql(SqlStatementReq("SELECT * FROM sqltestpeopletest1"))
                 }
                 .body()
 
@@ -73,33 +63,25 @@ class SqlTest(
             )
     }
 
-    @Topic(PEOPLE_TOPIC)
+    @Topic("sqltestpeopletest2")
     @Test
     fun `should mirror Kafka topic only once - second call should not trigger second Kafka subscription`(
         @ProducerOptions(valueSerializer = KafkaAvroSerializer::class)
         producer: Producer<String, GenericData.Record>
     ) {
-        val personId = UUID.randomUUID().toString()
-        val person =
-            GenericRecordBuilder(PeopleSchema)
-                .set("id", personId)
-                .set("firstName", Faker.instance().name().firstName())
-                .set("lastName", Faker.instance().name().lastName())
-                .set("birthDate", Faker.instance().date().birthday().toInstant().toEpochMilli())
-                .set("favouriteAnimal", Faker.instance().animal().name())
-                .build()
-        producer.send(ProducerRecord(PEOPLE_TOPIC, personId, person)).get()
+        val person = randomPerson()
+        producer.send(ProducerRecord("sqltestpeopletest2", person.get("id") as String, person)).get()
 
         httpClient
             .expectStatus<List<SqlStatementRow>>(HttpStatus.OK) {
-                sql(SqlStatementReq("SELECT * FROM $PEOPLE_TOPIC"))
+                sql(SqlStatementReq("SELECT * FROM sqltestpeopletest2"))
             }
 
         // execute for the second time
         val rows =
             httpClient
                 .expectStatus<List<SqlStatementRow>>(HttpStatus.OK) {
-                    sql(SqlStatementReq("SELECT * FROM $PEOPLE_TOPIC"))
+                    sql(SqlStatementReq("SELECT * FROM sqltestpeopletest2"))
                 }
                 .body()
 
