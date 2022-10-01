@@ -28,6 +28,34 @@ class SqlTest(
         assertThat(res.status).isEqualTo(HttpStatus.BAD_REQUEST)
     }
 
+    @Topic("sqltestpeopletest3")
+    @Test
+    fun `test all types`(
+        @ProducerOptions(valueSerializer = KafkaAvroSerializer::class)
+        producer: Producer<String, GenericData.Record>
+    ) {
+        val person = randomPersonV2()
+        producer.send(ProducerRecord("sqltestpeopletest3", person.get("id") as String, person)).get()
+        val rows =
+            httpClient
+                .expectStatus<List<SqlStatementRow>>(HttpStatus.OK) {
+                    sql(SqlStatementReq("SELECT * FROM `sqltestpeopletest3`"))
+                }
+                .body()
+
+        assertThat(rows).hasSize(1)
+        assertThat(rows[0])
+            .containsEntry("ID", person["id"])
+            .containsEntry("FIRSTNAME", person["firstName"])
+            .containsEntry("LASTNAME", person["lastName"])
+            .containsEntry("BIRTHDATE", person["birthDate"])
+            .containsEntry("FAVOURITEANIMAL", person["favouriteAnimal"])
+            .containsEntry("AFLOAT", person["aFloat"].toString().toDouble())
+            .containsEntry("ADOUBLE", person["aDouble"])
+            .containsEntry("ABOOLEAN", person["aBoolean"])
+            .containsEntry("AINT", person["aInt"])
+    }
+
     @Topic("sqltestpeopletest1")
     @Test
     fun `should return rows representing Kafka events`(

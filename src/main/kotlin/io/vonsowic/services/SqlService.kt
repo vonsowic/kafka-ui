@@ -67,6 +67,8 @@ class SqlService(
                                 sink.success()
                                 return@create
                             }
+
+                            Thread.sleep(20)
                         }
                     })
                     .thenMany(select(req))
@@ -119,12 +121,12 @@ class SqlService(
                             ),
                         )
                     )
-                    .doOnNext {
-                        mirroredTopics[it.topic()]!![it.partition()]!!.currentOffset = it.offset()
-                    }
                     .flatMap { event ->
                         conn.insert(event)
                             .thenReturn(event)
+                    }
+                    .doOnNext {
+                        mirroredTopics[it.topic()]!![it.partition()]!!.currentOffset = it.offset()
                     }
                     .doOnNext {
                         log.debug("inserted record from topic $topic, partition: ${it.partition()}, offset: ${it.offset()}")
@@ -202,9 +204,6 @@ class SqlService(
                 }
             Schema.Type.FIXED -> TODO()
             Schema.Type.BYTES -> TODO()
-            Schema.Type.FLOAT -> TODO()
-            Schema.Type.DOUBLE -> TODO()
-            Schema.Type.BOOLEAN -> TODO()
             Schema.Type.NULL -> TODO()
             else -> avroToDbType(type)
         }
@@ -214,6 +213,9 @@ class SqlService(
             Schema.Type.STRING -> "VARCHAR(10000)"
             Schema.Type.INT -> "INTEGER"
             Schema.Type.LONG -> "BIGINT"
+            Schema.Type.FLOAT -> "REAL"
+            Schema.Type.DOUBLE -> "DOUBLE PRECISION"
+            Schema.Type.BOOLEAN -> "BOOLEAN"
             else -> throw Exception("Unhandled type: $type")
         }
 
