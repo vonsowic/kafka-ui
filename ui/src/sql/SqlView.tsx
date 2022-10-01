@@ -1,10 +1,11 @@
+import React from "react";
 import { useCallback, useEffect, useState } from "react";
 import Axios from 'axios'
 import { Link, useParams } from "react-router-dom";
 import { Button, Container, Dimmer, Divider, Form, Icon, Label, Loader, Menu, Message, Table, TextArea } from "semantic-ui-react";
 
 
-type SqlResponse = any[][]
+type SqlResponse = object[]
 
 function SqlView() {
   const [columnNames, setColumnNames] = useState([] as string[])
@@ -19,10 +20,15 @@ function SqlView() {
     setLoading(true)
     Axios.post<SqlResponse>('/api/sql', { sql: sql })
       .then(({ data }) => {
-        setColumnNames(data[0])
-        setRows(data.splice(1))
         setErrorTitle('')
         setErrorMessage('')
+        if (data.length == 0) {
+          return
+        }
+
+        const col = Object.keys(data[0])
+        setColumnNames(col)
+        setRows(data.map(row => Object.values(row)))
       })
       .catch(err => {
         setErrorTitle(err.message)
@@ -106,15 +112,15 @@ function SqlView() {
         <Table.Body>
           {
             props.rows.slice(page * numberOfRowsPerPage, (page + 1) * numberOfRowsPerPage).map((row, i) => 
-              <Table.Row key={i}>
+              <Table.Row key={page * numberOfRowsPerPage + i}>
                 { 
-                  row.map(cell => 
-                    <Table.Cell key={cell}>
+                  row.map((cell, cellIndex) => 
+                    <Table.Cell key={page * numberOfRowsPerPage + i + "-" + cellIndex}>
                       {cell === null ? <span style={{color: 'red'}}>null</span> : cell}
                     </Table.Cell>
                   )
-                }
-              </Table.Row>
+              }
+            </Table.Row>
           )
           }
         </Table.Body>

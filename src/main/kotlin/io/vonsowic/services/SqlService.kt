@@ -3,6 +3,7 @@ package io.vonsowic.services
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient
 import io.micronaut.data.r2dbc.operations.R2dbcOperations
+import io.r2dbc.spi.Connection
 import io.r2dbc.spi.Result
 import io.vonsowic.KafkaEventPart
 import io.vonsowic.KafkaEventPartType.*
@@ -17,6 +18,7 @@ import io.vonsowic.utils.AppEvent
 import org.apache.avro.Schema
 import org.apache.avro.Schema.Parser
 import org.apache.avro.generic.GenericData
+import org.apache.avro.util.Utf8
 
 
 private val log = LoggerFactory.getLogger(SqlService::class.java)
@@ -57,7 +59,6 @@ class SqlService(
                         // wait until all tables are mirrored
                         // send complete signal when initial select is completed
                         while (true) {
-                            val x = this
                             val allRequestedTablesMirrored =
                                 tables.map { mirroredTopics[it] }
                                     .all { it?.isMirrored() ?: false }
@@ -93,7 +94,7 @@ class SqlService(
                             topicMetadata.partitions
                                 .associate {
                                     it.id to MirroredPartition(
-                                        startingOffset = it.latestOffset -1,
+                                        startingOffset = it.latestOffset - 1,
                                         currentOffset = -1
                                     )
                                 }
@@ -122,10 +123,7 @@ class SqlService(
                         mirroredTopics[it.topic()]!![it.partition()]!!.currentOffset = it.offset()
                     }
                     .flatMap { event ->
-                        val x = this
-                        conn.createStatement(toInsertStatement(event))
-                            .execute()
-                            .let { Mono.from(it) }
+                        conn.insert(event)
                             .thenReturn(event)
                     }
                     .doOnNext {
@@ -217,14 +215,27 @@ class SqlService(
             else -> throw Exception("Unhandled type: $type")
         }
 
-    private fun toInsertStatement(event: AppEvent): String {
-        val valueColumns = eventColumns(event.value())
-        val fields = "__partition, __offset, " + valueColumns.columns.joinToString(", ")
-        val values = "${event.partition()}, ${event.offset()}, " + valueColumns.rows.joinToString(", ")
-        return """
-            INSERT INTO ${event.topic()} ($fields)
+    private fun Connection.insert(event: AppEvent): Mono<Result> {
+        val eventColumns = eventColumns(event.value())
+        val columns = listOf("__partition", "__offset") + eventColumns.columns
+        val values = columns.joinToString(",") { "?" }
+        val result = createStatement(
+            """
+            INSERT INTO ${event.topic()} (${columns.joinToString(",")})
             VALUES ($values)
-        """.trimIndent()
+            """.trimIndent()
+        )
+
+        result
+            .bind(0, event.partition())
+            .bind(1, event.offset())
+
+        (0 until eventColumns.columns.size)
+            .forEach { i ->
+                result.bind(i + 2, eventColumns.rows[i])
+            }
+
+        return Mono.from(result.execute())
     }
 
     private fun eventColumns(event: KafkaEventPart): DbEvent =
@@ -235,7 +246,12 @@ class SqlService(
                     val columns = schema.fields.map { it.name() }
                     DbEvent(
                         columns = columns,
-                        rows = columns.map { "'${get(it)}'" }
+                        rows = columns.map {
+                            when(val row = get(it)) {
+                                is Utf8 -> row.toString()
+                                else -> row
+                            }
+                        }
                     )
                 }
             NIL -> DbEvent(columns = listOf(), rows = listOf())
@@ -250,23 +266,16 @@ class SqlService(
             }
             .flatMapMany(::toRow)
 
-    private fun toRow(result: Result): Flux<SqlStatementRow> {
-        var isFirstRow = true
-        return Flux.create { sink ->
+    private fun toRow(result: Result): Flux<SqlStatementRow> =
+        Flux.create { sink ->
             Flux.from(result.map { row, _ -> row })
                 .doOnComplete { sink.complete() }
                 .doOnError { sink.error(it) }
                 .subscribe { row ->
                     val columns = row.metadata.columnMetadatas.map { it.name }
-                    if (isFirstRow) {
-                        isFirstRow = false
-                        sink.next(columns)
-                    }
-
-                    sink.next(columns.map { row[it] })
+                    sink.next(columns.associateWith { row[it] })
                 }
         }
-    }
 
     data class DbEvent(
         val columns: List<String>,

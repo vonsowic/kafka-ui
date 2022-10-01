@@ -44,23 +44,13 @@ class SqlTest(
                 }
                 .body()
 
-        assertThat(rows).hasSize(2)
+        assertThat(rows).hasSize(1)
         assertThat(rows[0])
-            .contains(
-                "ID",
-                "FIRSTNAME",
-                "LASTNAME",
-                "BIRTHDATE",
-                "FAVOURITEANIMAL",
-            )
-        assertThat(rows[1])
-            .contains(
-                person["id"],
-                person["firstName"],
-                person["lastName"],
-                person["birthDate"],
-                person["favouriteAnimal"],
-            )
+            .containsEntry("ID", person["id"])
+            .containsEntry("FIRSTNAME", person["firstName"])
+            .containsEntry("LASTNAME", person["lastName"])
+            .containsEntry("BIRTHDATE", person["birthDate"])
+            .containsEntry("FAVOURITEANIMAL", person["favouriteAnimal"])
     }
 
     @Topic("sqltestpeopletest2")
@@ -85,23 +75,13 @@ class SqlTest(
                 }
                 .body()
 
-        assertThat(rows).hasSize(2)
+        assertThat(rows).hasSize(1)
         assertThat(rows[0])
-            .contains(
-                "ID",
-                "FIRSTNAME",
-                "LASTNAME",
-                "BIRTHDATE",
-                "FAVOURITEANIMAL",
-            )
-        assertThat(rows[1])
-            .contains(
-                person["id"],
-                person["firstName"],
-                person["lastName"],
-                person["birthDate"],
-                person["favouriteAnimal"],
-            )
+            .containsEntry("ID", person["id"])
+            .containsEntry("FIRSTNAME", person["firstName"])
+            .containsEntry("LASTNAME", person["lastName"])
+            .containsEntry("BIRTHDATE", person["birthDate"])
+            .containsEntry("FAVOURITEANIMAL", person["favouriteAnimal"])
     }
 
 }

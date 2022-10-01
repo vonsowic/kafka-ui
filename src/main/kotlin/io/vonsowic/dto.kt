@@ -4,7 +4,7 @@ data class SqlStatementReq(
     val sql: String
 )
 
-typealias SqlStatementRow = List<Any?>
+typealias SqlStatementRow = Map<String, Any?>
 
 data class KafkaEventCreateReq(
     val topic: String,

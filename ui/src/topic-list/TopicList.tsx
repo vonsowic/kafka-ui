@@ -1,8 +1,8 @@
-import { assertExpressionStatement } from "@babel/types";
+import React from "react";
 import { useEffect, useState } from "react";
 import Axios from 'axios'
 import { Link } from "react-router-dom";
-import { Button, Input, List, Radio } from 'semantic-ui-react'
+import {  Input, List, Radio } from 'semantic-ui-react'
 
 interface Topic {
   name: string
@@ -25,7 +25,6 @@ function TopicList() {
           toggle 
           active={includeTechnical} 
           onClick={() => setIncludeTechnical(!includeTechnical)}>
-        
       </Radio>
       <List>
         {
