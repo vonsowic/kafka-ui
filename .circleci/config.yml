@@ -6,11 +6,8 @@ version: 2
 # See: https://circleci.com/docs/2.0/configuration-reference/#jobs
 jobs:
   build:
-    # Specify the execution environment. You can specify an image from Dockerhub or use one of our Convenience Images from CircleCI's Developer Hub.
-    # See: https://circleci.com/docs/2.0/configuration-reference/#docker-machine-macos-windows-executor
-    docker:
-      # specify the version you desire here
-      - image: circleci/openjdk:17.0.1-jdk-buster-node-browsers
+    machine:
+      image: ubuntu-2004:202010-01
 
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
@@ -25,7 +22,6 @@ jobs:
       TERM: dumb
     # Add steps to the job
     # See: https://circleci.com/docs/2.0/configuration-reference/#steps
-    machine: true
     steps:
       - checkout
 
