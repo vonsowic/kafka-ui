@@ -90,11 +90,13 @@ function SqlView() {
   }
 
   function SqlRowsView(props: SqlRowsView) {
+    const selectPageButtonsNum = 20
     const numberOfRowsPerPage = 50
     const numberOfPages = Math.ceil(props.rows.length / numberOfRowsPerPage)
 
     const [page, setPage] = useState(0)
-  
+    const [selectPageButtonOffset, setSelectPageButtonOffset] = useState(0)
+
     return (
       <Table celled>
         <Table.Header>
@@ -127,14 +129,35 @@ function SqlView() {
 
         <Table.Footer>
           <Table.Row>
-            <Table.HeaderCell colSpan={props.columnNames.length}>
-              <Menu floated='right' pagination>
-                {/* <Menu.Item as='a' icon>
+            <Table.HeaderCell colSpan={props.columnNames.length + 2}>
+              <Menu pagination>
+                <Menu.Item as='a' icon
+                    onClick={() => {
+                      const newOffset = selectPageButtonOffset - numberOfRowsPerPage
+                      if (newOffset > 0) {
+                        setSelectPageButtonOffset(newOffset)
+                      } else {
+                        setSelectPageButtonOffset(0)
+                      }
+                    }}>
                   <Icon name='chevron left' />
-                </Menu.Item> */}
+                </Menu.Item>
+
+                <Menu.Item 
+                    as='a'
+                    icon 
+                    onClick={() => {
+                      const newOffset = selectPageButtonOffset + numberOfRowsPerPage
+                      if (newOffset < numberOfPages) {
+                        setSelectPageButtonOffset(newOffset)
+                      } 
+                    }}>
+                  <Icon name='chevron right' />
+                </Menu.Item>
 
                 {
                   Array.from(Array(numberOfPages).keys())
+                    .slice(selectPageButtonOffset, selectPageButtonOffset + selectPageButtonsNum)
                     .map(p => (
                       <Menu.Item 
                         key={p}
@@ -144,10 +167,6 @@ function SqlView() {
                       </Menu.Item>
                     ))
                 }
-                
-                {/* <Menu.Item as='a' icon>
-                  <Icon name='chevron right' />
-                </Menu.Item> */}
               </Menu>
             </Table.HeaderCell>
           </Table.Row>
