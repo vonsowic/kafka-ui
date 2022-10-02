@@ -144,7 +144,8 @@ class SqlService(
                 .filter { it.value.uppercase() in KEYWORDS_BEFORE_TABLE_NAME }
                 .map { it.index + 1 }
                 .map { get(it) }
-                .map { it.removePrefix("`").removeSuffix("`") }.toList()
+                .map { it.removePrefix("\"").removeSuffix("\"") }
+                .toList()
         }
 
     private fun createTable(table: String): Mono<Void> =
@@ -177,7 +178,7 @@ class SqlService(
             ?.filter { !columns.contains(it) }
             ?.run(columns::addAll)
 
-        return "CREATE TABLE $table ( ${columns.joinToString(separator = ",")} )"
+        return "CREATE TABLE \"$table\" ( ${columns.joinToString(separator = ",")} )"
     }
 
     private fun ddl(schemaMetadata: SchemaMetadata): Collection<String> =
@@ -225,7 +226,7 @@ class SqlService(
         val values = columns.joinToString(",") { "?" }
         val result = createStatement(
             """
-            INSERT INTO ${event.topic()} (${columns.joinToString(",")})
+            INSERT INTO "${event.topic()}" (${columns.joinToString(",")})
             VALUES ($values)
             """.trimIndent()
         )

@@ -6,6 +6,7 @@ import io.vonsowic.*
 import jakarta.inject.Inject
 import net.datafaker.Faker
 import org.apache.avro.generic.GenericData
+import org.apache.avro.generic.GenericRecord
 import org.apache.avro.generic.GenericRecordBuilder
 import org.apache.kafka.clients.producer.Producer
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -28,18 +29,18 @@ class SqlTest(
         assertThat(res.status).isEqualTo(HttpStatus.BAD_REQUEST)
     }
 
-    @Topic("sqltestpeopletest3")
+    @Topic("sql-test-people3")
     @Test
     fun `test all types`(
         @ProducerOptions(valueSerializer = KafkaAvroSerializer::class)
         producer: Producer<String, GenericData.Record>
     ) {
         val person = randomPersonV2()
-        producer.send(ProducerRecord("sqltestpeopletest3", person.get("id") as String, person)).get()
+        producer.send(ProducerRecord("sql-test-people3", person.get("id") as String, person)).get()
         val rows =
             httpClient
                 .expectStatus<List<SqlStatementRow>>(HttpStatus.OK) {
-                    sql(SqlStatementReq("SELECT * FROM `sqltestpeopletest3`"))
+                    sql(SqlStatementReq("SELECT * FROM \"sql-test-people3\""))
                 }
                 .body()
 
@@ -68,7 +69,7 @@ class SqlTest(
         val rows =
             httpClient
                 .expectStatus<List<SqlStatementRow>>(HttpStatus.OK) {
-                    sql(SqlStatementReq("SELECT * FROM sqltestpeopletest1"))
+                    sql(SqlStatementReq("SELECT * FROM \"sqltestpeopletest1\""))
                 }
                 .body()
 
@@ -92,14 +93,14 @@ class SqlTest(
 
         httpClient
             .expectStatus<List<SqlStatementRow>>(HttpStatus.OK) {
-                sql(SqlStatementReq("SELECT * FROM sqltestpeopletest2"))
+                sql(SqlStatementReq("SELECT * FROM \"sqltestpeopletest2\""))
             }
 
         // execute for the second time
         val rows =
             httpClient
                 .expectStatus<List<SqlStatementRow>>(HttpStatus.OK) {
-                    sql(SqlStatementReq("SELECT * FROM `sqltestpeopletest2`"))
+                    sql(SqlStatementReq("SELECT * FROM \"sqltestpeopletest2\""))
                 }
                 .body()
 
