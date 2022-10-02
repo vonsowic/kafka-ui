@@ -29,6 +29,38 @@ class SqlTest(
         assertThat(res.status).isEqualTo(HttpStatus.BAD_REQUEST)
     }
 
+    @Topic("sql-test-people-4")
+    @Topic("sql-test-address-4")
+    @Test
+    fun `test with sql join`(
+        @ProducerOptions(valueSerializer = KafkaAvroSerializer::class)
+        producer: Producer<String, GenericRecord>
+    ) {
+        val person = randomPerson()
+        val personId = person.get("id") as String
+        producer.send(ProducerRecord("sql-test-people-4", personId, person))
+        val address = randomAddress(personId)
+        producer.send(ProducerRecord("sql-test-address-4", address.id, address))
+        producer.flush()
+
+        val rows =
+            httpClient
+                .expectStatus<List<SqlStatementRow>>(HttpStatus.OK) {
+                    sql(SqlStatementReq("SELECT *, a.ID as ADDRESSID FROM \"sql-test-people-4\" p JOIN \"sql-test-address-4\" a ON p.ID = a.PERSONID"))
+                }
+                .body()
+
+        assertThat(rows).hasSize(1)
+        assertThat(rows[0])
+            .containsEntry("ID", personId)
+            .containsEntry("FIRSTNAME", person["firstName"])
+            .containsEntry("LASTNAME", person["lastName"])
+            .containsEntry("BIRTHDATE", person["birthDate"])
+            .containsEntry("ADDRESSID", address.id)
+            .containsEntry("PERSONID", personId)
+            .containsEntry("ADDRESS", address.address)
+    }
+
     @Topic("sql-test-people3")
     @Test
     fun `test all types`(

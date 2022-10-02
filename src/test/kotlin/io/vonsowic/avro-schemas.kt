@@ -1,5 +1,6 @@
 package io.vonsowic
 
+import io.vonsowic.test.avro.Address
 import net.datafaker.Faker
 import org.apache.avro.Schema
 import org.apache.avro.SchemaBuilder
@@ -81,6 +82,13 @@ fun randomPerson(): GenericData.Record =
             .set("favouriteAnimal", animal().name())
             .build()
     }
+
+fun randomAddress(personId: String = UUID.randomUUID().toString()): Address =
+    Address.newBuilder()
+        .setId(UUID.randomUUID().toString())
+        .setPersonId(personId)
+        .setAddress(Faker.instance().address().fullAddress())
+        .build()
 
 fun randomPersonV2(): GenericData.Record =
     with(Faker.instance()) {
