@@ -28,7 +28,7 @@ private val KEYWORDS_BEFORE_TABLE_NAME = listOf("FROM", "JOIN")
 @Singleton
 class SqlService(
     private val metadataService: MetadataService,
-    private val db: R2dbcOperations,
+    db: R2dbcOperations,
     private val schemaRegistryClient: SchemaRegistryClient,
     private val eventsService: KafkaEventsService
 ) {
@@ -46,6 +46,11 @@ class SqlService(
                 currentOffset >= startingOffset
             }
         }
+
+    private val connection: Mono<Connection> =
+        db.connectionFactory()
+            .create()
+            .let { Mono.from(it) }
 
     /**
      * first row contains column names
@@ -109,7 +114,7 @@ class SqlService(
     private fun mirrorTopic(topic: String) {
         createTable(topic)
             .doOnNext { log.info("Table for topic $topic has been created") }
-            .then(db.connectionFactory().create().let { Mono.from(it) })
+            .then(connection)
             .flatMapMany { conn ->
                 eventsService
                     .poll(
@@ -149,9 +154,7 @@ class SqlService(
         }
 
     private fun createTable(table: String): Mono<Void> =
-        db.connectionFactory()
-            .create()
-            .let { Mono.from(it) }
+        connection
             .flatMap { conn ->
                 conn.createStatement(ddl(table))
                     .execute()
@@ -263,7 +266,7 @@ class SqlService(
         }
 
     private fun select(req: SqlStatementReq): Flux<SqlStatementRow> =
-        db.connectionFactory().create().let { Mono.from(it) }
+        connection
             .flatMap { conn ->
                 conn.createStatement(req.sql)
                     .execute()
