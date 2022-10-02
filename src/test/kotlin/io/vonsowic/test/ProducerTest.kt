@@ -1,8 +1,7 @@
 package io.vonsowic.test
 
-import io.confluent.kafka.schemaregistry.ParsedSchema
 import io.confluent.kafka.schemaregistry.avro.AvroSchema
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient
 import io.confluent.kafka.serializers.KafkaAvroDeserializer
 import io.micronaut.http.HttpStatus
 import io.micronaut.http.client.annotation.Client
@@ -22,12 +21,12 @@ class ProducerTest(
     @Test
     fun `should send Kafka event with key string and value string`(
         @ConsumerOptions(
-            topic = "test"
+            topic = "producer-test-1"
         ) consumer: TestConsumer<String, String>
     ) {
         val req =
             KafkaEventCreateReq(
-                topic = "test",
+                topic = "producer-test-1",
                 event = KafkaEvent(
                     key = KafkaEventPart(
                         data = UUID.randomUUID().toString(),
@@ -54,12 +53,12 @@ class ProducerTest(
     @Test
     fun `should send Kafka event with null key and null value`(
         @ConsumerOptions(
-            topic = "test"
+            topic = "producer-test-2"
         ) consumer: TestConsumer<String, String>
     ) {
         val req =
             KafkaEventCreateReq(
-                topic = "test",
+                topic = "producer-test-2",
                 event = KafkaEvent(
                     key = KafkaEventPart.NIL,
                     value = KafkaEventPart.NIL
@@ -80,9 +79,10 @@ class ProducerTest(
     @Test
     fun `should send Kafka event with string key and Avro value`(
         @ConsumerOptions(
-            topic = "test",
+            topic = "producer-test-3",
             valueDeserializer = KafkaAvroDeserializer::class,
-        ) consumer: TestConsumer<String, GenericData.Record>
+        ) consumer: TestConsumer<String, GenericData.Record>,
+        schemaRegistryClient: SchemaRegistryClient
     ) {
         val personId = UUID.randomUUID().toString()
         val person =
@@ -93,12 +93,11 @@ class ProducerTest(
                 "birthDate" to Faker.instance().date().birthday().toInstant().toEpochMilli()
             )
 
-        CachedSchemaRegistryClient("http://localhost:8081", 1)
-            .register("test-value", AvroSchema(PeopleSchema.toString()))
+        schemaRegistryClient.register("producer-test-3-value", AvroSchema(PeopleSchema.toString()))
 
         val req =
             KafkaEventCreateReq(
-                topic = "test",
+                topic = "producer-test-3",
                 event = KafkaEvent(
                     key = KafkaEventPart(
                         data = personId,
@@ -119,10 +118,10 @@ class ProducerTest(
         val record = consumer.poll()
         assertThat(record?.key()).isEqualTo(personId)
         with(record!!.value()) {
-           assertThat(get("id").toString()).isEqualTo(person["id"])
-           assertThat(get("firstName").toString()).isEqualTo(person["firstName"])
-           assertThat(get("lastName").toString()).isEqualTo(person["lastName"])
-           assertThat(get("birthDate")).isEqualTo(person["birthDate"])
+            assertThat(get("id").toString()).isEqualTo(person["id"])
+            assertThat(get("firstName").toString()).isEqualTo(person["firstName"])
+            assertThat(get("lastName").toString()).isEqualTo(person["lastName"])
+            assertThat(get("birthDate")).isEqualTo(person["birthDate"])
         }
         assertThat(consumer.poll()).isNull()
     }

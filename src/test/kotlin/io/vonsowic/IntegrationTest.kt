@@ -1,6 +1,7 @@
 package io.vonsowic
 
-import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig
 import io.confluent.kafka.serializers.KafkaAvroSerializerConfig
@@ -17,12 +18,12 @@ import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.Producer
 import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.jupiter.api.extension.*
-import org.testcontainers.containers.KafkaContainer
-import org.testcontainers.utility.DockerImageName
+import org.testcontainers.containers.DockerComposeContainer
+import org.testcontainers.containers.wait.strategy.Wait
+import java.io.File
 import java.lang.Thread.sleep
 import java.time.Duration
 import java.util.*
@@ -34,11 +35,11 @@ import kotlin.reflect.KClass
 private const val TEST_CONSUMER_QUEUE_CAPACITY = 1000
 private val TEST_CONSUMER_POLL_DURATION = Duration.ofMillis(250)
 private const val REPLICATION_FACTOR: Short = 1
-private const val SCHEMA_REGISTRY_URL = "http://localhost:8081"
 
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.CLASS)
 @ExtendWith(KafkaExtension::class)
+//@ExtendWith(SchemaRegistryExtension::class)
 @MicronautTest(transactional = false)
 annotation class IntegrationTest
 
@@ -93,15 +94,33 @@ class TestConsumer<K, V>(private val consumer: Consumer<K, V>) {
 }
 
 class KafkaExtension : BeforeAllCallback, BeforeEachCallback, AfterEachCallback, ParameterResolver {
+    companion object {
+        private val consumersByTopic = mutableMapOf<String, TestConsumer<*, *>>()
+        private lateinit var admin: Admin
+        private var isRunning = false
+        private val infra =
+            DockerComposeContainer(File("docker-compose.yml"))
+                .withExposedService("broker", 9092, Wait.forListeningPort())
+                .withExposedService(
+                    "schema-registry", 8081,
+                    Wait.forHttp("/subjects")
+                        .forStatusCode(200)
+                )
 
-    private val kafkaContainer = KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:6.2.1"))
-    private val consumersByTopic = mutableMapOf<String, TestConsumer<*, *>>()
-    private lateinit var admin: Admin
+        fun bootstrapServers(): String = "PLAINTEXT://0.0.0.0:${infra.getServicePort("broker", 9092)}"
+
+        fun schemaRegistryUrl(): String = "http://localhost:${infra.getServicePort("schema-registry", 8081)}"
+    }
 
     override fun beforeAll(context: ExtensionContext) {
-        kafkaContainer.start()
+        if (isRunning) {
+            return
+        }
+
+        infra.start()
+        isRunning = true
         System.setProperty("kafka.${CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG}", bootstrapServers())
-        System.setProperty("kafka.${AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG}", SCHEMA_REGISTRY_URL)
+        System.setProperty("kafka.${AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG}", schemaRegistryUrl())
 
         admin =
             AdminClient.create(
@@ -132,7 +151,6 @@ class KafkaExtension : BeforeAllCallback, BeforeEachCallback, AfterEachCallback,
             .forEach { it.close() }
 
         consumersByTopic.clear()
-        admin.deleteAllTopics()
     }
 
 
@@ -171,7 +189,7 @@ class KafkaExtension : BeforeAllCallback, BeforeEachCallback, AfterEachCallback,
                 props[ProducerConfig.BOOTSTRAP_SERVERS_CONFIG] = bootstrapServers()
                 props[ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG] = options.keySerializer.java
                 props[ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG] = options.valueSerializer.java
-                props[KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG] = SCHEMA_REGISTRY_URL
+                props[KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG] = schemaRegistryUrl()
                 KafkaProducer<Any, Any>(props)
             }
 
@@ -183,40 +201,16 @@ class KafkaExtension : BeforeAllCallback, BeforeEachCallback, AfterEachCallback,
                 this[ConsumerConfig.AUTO_OFFSET_RESET_CONFIG] = "earliest"
                 this[ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG] = config.keyDeserializer.java
                 this[ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG] = config.valueDeserializer.java
-                this[KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG] = SCHEMA_REGISTRY_URL
+                this[KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG] = schemaRegistryUrl()
             }
             .let { props -> KafkaConsumer<Any?, Any?>(props) }
             .apply { subscribe(listOf(config.topic)) }
             .let { kafkaConsumer -> TestConsumer(consumer = kafkaConsumer) }
-
-    private fun bootstrapServers(): String =
-        kafkaContainer.bootstrapServers
 }
 
-private fun Admin.create(topics: List<Topic>) {
-    // deleteTopic in previous test may result in topic create failure
-    var attempts = 10
-    while (attempts-- > 0) {
-        try {
-            topics
-                .map { NewTopic(it.topic, it.partitions, REPLICATION_FACTOR) }
-                .let(this::createTopics)
-                .all()
-                .get()
-
-            break
-        } catch (_: Exception) {
-            sleep(100)
-        }
-    }
-}
-
-private fun Admin.deleteAllTopics() =
-    listTopics()
-        .listings()
-        .get()
-        .map { it.name() }
-        .let(this::deleteTopics)
+private fun Admin.create(topics: List<Topic>) =
+    topics
+        .map { NewTopic(it.topic, it.partitions, REPLICATION_FACTOR) }
+        .let(this::createTopics)
         .all()
         .get()
-

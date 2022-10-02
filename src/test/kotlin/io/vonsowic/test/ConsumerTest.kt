@@ -12,30 +12,29 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.util.*
 
-const val TEST_TOPIC = "test-topic"
-
-@Topic(topic = TEST_TOPIC)
 @IntegrationTest
 class ConsumerTest(
     private val httpClient: AppClient,
 ) {
 
+    @Topic("consumer-test-1")
     @Test
     fun `should fetch empty list`() {
-        with(httpClient.fetchEvents(TEST_TOPIC)) {
+        with(httpClient.fetchEvents("consumer-test-1")) {
             assertThat(status).isEqualTo(HttpStatus.OK)
             assertThat(body()).isEmpty()
         }
     }
 
+    @Topic("consumer-test-2")
     @Test
     fun `should fetch Kafka event with null key and null value`(
         @ProducerOptions
         producer: Producer<String, String?>
     ) {
-        producer.send(ProducerRecord(TEST_TOPIC, null, null)).get()
+        producer.send(ProducerRecord("consumer-test-2", null, null)).get()
 
-        httpClient.fetchEvents(TEST_TOPIC)
+        httpClient.fetchEvents("consumer-test-2")
             .apply {
                 assertThat(status).isEqualTo(HttpStatus.OK)
                 assertThat(body()).hasSize(1)
@@ -48,6 +47,7 @@ class ConsumerTest(
                 assertThat(value.data).isEqualTo(0)
             }
     }
+    @Topic("consumer-test-3")
     @Test
     fun `should fetch all Kafka events with key string and value string`(
         @ProducerOptions
@@ -55,9 +55,9 @@ class ConsumerTest(
     ) {
         val testKey = "key-${UUID.randomUUID()}"
         val testValue = "value-${UUID.randomUUID()}"
-        producer.send(ProducerRecord(TEST_TOPIC, testKey, testValue)).get()
+        producer.send(ProducerRecord("consumer-test-3", testKey, testValue)).get()
 
-        httpClient.fetchEvents(TEST_TOPIC)
+        httpClient.fetchEvents("consumer-test-3")
             .apply {
                 assertThat(status).isEqualTo(HttpStatus.OK)
                 assertThat(body()).hasSize(1)
@@ -71,6 +71,7 @@ class ConsumerTest(
             }
     }
 
+    @Topic("consumer-test-4")
     @Test
     fun `should fetch all Kafka events with key avro and value avro`(
         @ProducerOptions(valueSerializer = KafkaAvroSerializer::class)
@@ -86,9 +87,9 @@ class ConsumerTest(
                 .set("favouriteAnimal", null)
                 .build()
 
-        producer.send(ProducerRecord(TEST_TOPIC, personId, person)).get()
+        producer.send(ProducerRecord("consumer-test-4", personId, person)).get()
 
-        httpClient.fetchEvents(TEST_TOPIC)
+        httpClient.fetchEvents("consumer-test-4")
             .apply {
                 assertThat(status).isEqualTo(HttpStatus.OK)
                 assertThat(body()).hasSize(1)

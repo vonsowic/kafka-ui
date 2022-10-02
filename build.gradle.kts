@@ -48,7 +48,7 @@ dependencies {
     testImplementation("io.micronaut.test:micronaut-test-rest-assured")
     testImplementation("net.datafaker:datafaker:1.5.0")
     testImplementation("org.assertj:assertj-core:3.23.1")
-    testImplementation("org.testcontainers:kafka:1.17.3")
+    testImplementation("org.testcontainers:testcontainers:1.17.3")
 }
 
 
