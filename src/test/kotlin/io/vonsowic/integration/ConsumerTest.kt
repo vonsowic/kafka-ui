@@ -1,4 +1,4 @@
-package io.vonsowic.test
+package io.vonsowic.integration
 
 import io.confluent.kafka.serializers.KafkaAvroSerializer
 import io.micronaut.core.type.Argument

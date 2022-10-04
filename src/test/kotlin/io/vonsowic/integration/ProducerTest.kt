@@ -1,4 +1,4 @@
-package io.vonsowic.test
+package io.vonsowic.integration
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient

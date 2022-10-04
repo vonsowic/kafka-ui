@@ -1,4 +1,4 @@
-package io.vonsowic.test
+package io.vonsowic.integration
 
 import io.micronaut.http.HttpStatus
 import io.vonsowic.AppClient
