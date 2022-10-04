@@ -1,7 +1,5 @@
 package io.vonsowic
 
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig
 import io.confluent.kafka.serializers.KafkaAvroSerializerConfig
@@ -24,7 +22,6 @@ import org.junit.jupiter.api.extension.*
 import org.testcontainers.containers.DockerComposeContainer
 import org.testcontainers.containers.wait.strategy.Wait
 import java.io.File
-import java.lang.Thread.sleep
 import java.time.Duration
 import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
@@ -39,7 +36,6 @@ private const val REPLICATION_FACTOR: Short = 1
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.CLASS)
 @ExtendWith(KafkaExtension::class)
-//@ExtendWith(SchemaRegistryExtension::class)
 @MicronautTest(transactional = false)
 annotation class IntegrationTest
 
