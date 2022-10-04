@@ -7,7 +7,6 @@ plugins {
     id("com.github.davidmc24.gradle.plugin.avro") version "1.4.0"
 }
 
-version = "0.1"
 group = "io.vonsowic"
 
 val kotlinVersion=project.properties.get("kotlinVersion")

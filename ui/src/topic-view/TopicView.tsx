@@ -30,7 +30,7 @@ function TopicView() {
       // const es = new EventSource(url) 
       // es.onmessage = (message) => addKafkaEvent(message.data)
       
-      Axios.get<any[]>('/api/events', { params: { topic: topicName } })
+      Axios.get<any[]>('/api/events', { params: { t0: topicName } })
         .then(({ data }) => {
           
           data.forEach(e => addKafkaEvent(e))

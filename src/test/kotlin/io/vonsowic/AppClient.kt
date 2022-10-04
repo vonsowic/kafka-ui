@@ -1,5 +1,6 @@
 package io.vonsowic
 
+import io.micronaut.http.HttpRequest
 import io.micronaut.http.annotation.QueryValue
 import io.micronaut.http.client.annotation.Client
 import io.micronaut.http.HttpResponse
@@ -26,10 +27,7 @@ interface AppClient {
     fun sendEvent(@Body body: KafkaEventCreateReq): HttpResponse<Void>
 
     @Get("/events")
-    fun fetchEvents(@QueryValue("topic") topic: String): HttpResponse<List<KafkaEvent>>
-
-    @Get("/events")
-    fun fetchEvents(@QueryValue("topic") topics: Collection<String>): HttpResponse<List<KafkaEvent>>
+    fun fetchEvents(@QueryValue("t0") topic: String): HttpResponse<List<KafkaEvent>>
 
     @Get("/topics")
     fun listTopics(): HttpResponse<List<ListTopicItem>>

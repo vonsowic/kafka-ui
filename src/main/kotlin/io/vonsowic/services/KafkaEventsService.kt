@@ -12,6 +12,7 @@ import jakarta.inject.Singleton
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericRecordBuilder
+import org.apache.kafka.clients.admin.OffsetSpec
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.header.internals.RecordHeader
@@ -31,6 +32,12 @@ data class PollOptions(
 
 data class PollOption(
     val topicName: String,
+    val partitionRange: Map<Int, PartitionRange> = mapOf()
+)
+
+data class PartitionRange(
+    val startOffset: Long,
+    val endOffset: Long,
 )
 
 @Singleton
@@ -52,6 +59,15 @@ class KafkaEventsService(
         consumersPool
             .consumer(options.topicOptions)
             .receive()
+            .filter { record ->
+                options.topicOptions
+                    .find { it.topicName == record.topic() }
+                    ?.partitionRange
+                    ?.get(record.partition())
+                    ?.endOffset
+                    ?.let { record.offset() <= it }
+                    ?: true
+            }
             .let {
                 if (options.maxIdleTime != null) {
                     it.completeOnIdleStream(maxIdleTime = options.maxIdleTime)
