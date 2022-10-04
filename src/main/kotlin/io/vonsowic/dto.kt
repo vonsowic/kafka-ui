@@ -9,10 +9,18 @@ typealias SqlStatementRow = Map<String, Any?>
 data class KafkaEventCreateReq(
     val topic: String,
     val partition: Int? = null,
-    val event: KafkaEvent? = null
+    val event: KafkaEventCreate? = null
+)
+
+data class KafkaEventCreate(
+    val key: KafkaEventPart,
+    val value: KafkaEventPart,
+    val headers: Map<String, String> = mapOf()
 )
 
 data class KafkaEvent(
+    val topic: String,
+    val partition: Int,
     val key: KafkaEventPart,
     val value: KafkaEventPart,
     val headers: Map<String, String> = mapOf()

@@ -13,19 +13,26 @@ import io.vonsowic.services.*
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.avro.util.Utf8
+import org.apache.kafka.common.TopicPartition
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import java.time.Duration
 
+
+private val TOPIC_REGEX = Regex("^t(\\d+)\$")
+private val PARTITION_OPTION_REGEX = Regex("^t(\\d+)p(\\d+)([el])\$")
+
 @Suppress("unused")
 @Controller("/api/events")
 class KafkaEventsController(
-    private val kafkaEventsService: KafkaEventsService
+    private val kafkaEventsService: KafkaEventsService,
+    private val senderService: SenderService,
+    private val metadataService: MetadataService
 ) {
 
     @Post
     fun sendEvent(@Body req: KafkaEventCreateReq): Mono<Void> =
-        kafkaEventsService.send(req)
+        senderService.send(req)
 
     @Get
     fun poll(req: HttpRequest<Void>): Flux<KafkaEvent> =
@@ -33,6 +40,8 @@ class KafkaEventsController(
             .poll(req.pollOptions())
             .map { record ->
                 KafkaEvent(
+                    topic = record.topic(),
+                    partition = record.partition(),
                     key = record.key().toMapIfAvro(),
                     value = record.value().toMapIfAvro(),
                     headers = record.headers()
@@ -41,6 +50,76 @@ class KafkaEventsController(
                         ?: mapOf()
                 )
             }
+
+    private fun HttpRequest<Void>.pollOptions(): PollOptions =
+        this.parameters
+            .asMap(String::class.java, String::class.java)
+            .let { params ->
+                val topicsByIndex =
+                    params.entries
+                        .filter { it.key.matches(TOPIC_REGEX) }
+                        .associate {
+                            TOPIC_REGEX.matchEntire(it.key)!!.groupValues[1].toInt() to it.value
+                        }
+
+                val topicToPartitionToRange =
+                    topicsByIndex.values
+                        .associateWith { mutableMapOf<Int, MutablePartitionRange>() }
+                        .toMutableMap()
+
+                metadataService.topicsMetadata(topicsByIndex.values)
+                    .flatMap {
+                        it.partitions
+                            .map { partition ->
+                                TopicPartition(it.name, partition.id) to partition.latestOffset
+                            }
+                    }
+                    .forEach {
+                        topicToPartitionToRange[it.first.topic()]!!
+                            .computeIfAbsent(it.first.partition()) { MutablePartitionRange() }
+                            .endOffset = it.second
+                    }
+
+                params.entries
+                    .filter { it.key.matches(PARTITION_OPTION_REGEX) }
+                    .forEach {
+                        val match = PARTITION_OPTION_REGEX.matchEntire(it.key)!!.groupValues
+                        val topicIndex = match[1].toInt()
+                        val partition = match[2].toInt()
+                        val isStarting = match[3] == "e"
+                        val topic = topicsByIndex[topicIndex] ?: throw Exception("missing 't$topicIndex' query param")
+                        val offset = it.value.toLong()
+                        topicToPartitionToRange[topic]!!
+                            .computeIfAbsent(partition) { MutablePartitionRange() }
+                            .apply {
+                                if (isStarting) {
+                                    startOffset = offset
+                                } else {
+                                    endOffset = offset
+                                }
+                            }
+                    }
+
+                PollOptions(
+                    topicOptions = topicToPartitionToRange.map {
+                        val topic = it.key
+                        PollOption(
+                            topicName = topic,
+                            partitionRange = it.value
+                                .entries
+                                .filter {
+                                    with(it.value) {
+                                        (startOffset ?: 0) != endOffset
+                                    }
+                                }
+                                .associate { partitionEntry ->
+                                    partitionEntry.key to partitionEntry.value.toPartitionRange()
+                                }
+                        )
+                    },
+                )
+            }
+
 }
 
 private fun KafkaEventPart.toMapIfAvro(): KafkaEventPart =
@@ -63,67 +142,14 @@ private fun GenericData.Record.value(field: Schema.Field): Any? =
         else -> value
     }
 
-private val TOPIC_REGEX = Regex("^t(\\d+)\$")
-private val PARTITION_OPTION_REGEX = Regex("^t(\\d+)p(\\d+)([el])\$")
 
-data class TmpPartitionRange(
-    var start: Long? = null,
-    var end: Long? = null,
+data class MutablePartitionRange(
+    var startOffset: Long? = null,
+    var endOffset: Long? = null,
 ) {
-    fun partitionRange() =
+    fun toPartitionRange() =
         PartitionRange(
-            startOffset = start ?: EARLIEST_OFFSET,
-            endOffset = end ?: LATEST_OFFSET
+            startOffset = startOffset,
+            endOffset = endOffset
         )
 }
-
-private fun HttpRequest<Void>.pollOptions(): PollOptions =
-    this.parameters
-        .asMap(String::class.java, String::class.java)
-        .let { params ->
-            val topicsByIndex =
-                params.entries
-                    .filter { it.key.matches(TOPIC_REGEX) }
-                    .associate {
-                        TOPIC_REGEX.matchEntire(it.key)!!.groupValues[1].toInt() to it.value
-                    }
-
-            val topicToPartitionToRange =
-                topicsByIndex.values
-                    .associateWith { mutableMapOf<Int, TmpPartitionRange>() }
-                    .toMutableMap()
-
-            params.entries
-                .filter { it.key.matches(PARTITION_OPTION_REGEX) }
-                .forEach {
-                    val match = PARTITION_OPTION_REGEX.matchEntire(it.key)!!.groupValues
-                    val topicIndex = match[1].toInt()
-                    val partition = match[2].toInt()
-                    val isStarting = match[3] == "e"
-                    val topic = topicsByIndex[topicIndex] ?: throw Exception("missing 't$topicIndex' query param")
-                    val offset = it.value.toLong()
-                    topicToPartitionToRange[topic]!!
-                        .computeIfAbsent(partition) { TmpPartitionRange() }
-                        .apply {
-                            if (isStarting) {
-                                this.start = offset
-                            } else {
-                                this.end = offset
-                            }
-                        }
-                }
-
-            PollOptions(
-                maxIdleTime = Duration.ofSeconds(1),
-                topicOptions = topicToPartitionToRange.map {
-                    PollOption(
-                        topicName = it.key,
-                        partitionRange = it.value
-                            .entries
-                            .associate { partitionEntry ->
-                                partitionEntry.key to partitionEntry.value.partitionRange()
-                            }
-                    )
-                },
-            )
-        }

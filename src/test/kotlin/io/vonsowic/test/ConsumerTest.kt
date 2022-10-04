@@ -12,7 +12,10 @@ import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericRecordBuilder
 import org.apache.kafka.clients.producer.Producer
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.TopicPartition
+import org.assertj.core.api.Assertions
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.SoftAssertions.assertSoftly
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
 import java.util.*
@@ -46,25 +49,33 @@ class ConsumerTest(
                     add("t0", "consumer-test-5-1")
                     add("t1", "consumer-test-5-2")
 
-                    // from offset 10 to 12 (including start and end range)
+                    // from offset 10 to 12 (including start and excluding end range)
                     add("t0p0e", "10")
-                    add("t0p0l", "12")
+                    add("t0p0l", "13")
 
-                    // from the last event (including last)
+                    // from the last event (excluding last)
                     add("t0p1e", "9")
 
                     // to the first event only (including first)
-                    add("t1p0l", "0")
+                    add("t1p0l", "1")
                 }
             }
 
         Mono.from(rawHttpClient.retrieve(req, Argument.listOf(KafkaEvent::class.java)))
             .block()!!
             .also {
-                assertThat(it).hasSize(5)
-            }
-            .apply {
-
+                assertSoftly { softly ->
+                    with(softly) {
+                        assertThat(it).hasSize(5)
+                        val countsPerTopicPartition =
+                            it.groupBy { TopicPartition(it.topic, it.partition) }
+                                .entries
+                                .associate { it.key to it.value.size }
+                        assertThat(countsPerTopicPartition[TopicPartition("consumer-test-5-1", 0)]).isEqualTo(3)
+                        assertThat(countsPerTopicPartition[TopicPartition("consumer-test-5-1", 1)]).isEqualTo(1)
+                        assertThat(countsPerTopicPartition[TopicPartition("consumer-test-5-2", 0)]).isEqualTo(1)
+                    }
+                }
             }
     }
 

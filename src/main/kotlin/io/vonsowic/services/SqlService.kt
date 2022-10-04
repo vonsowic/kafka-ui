@@ -116,12 +116,16 @@ class SqlService(
             .doOnNext { log.info("Table for topic $topic has been created") }
             .then(connection)
             .flatMapMany { conn ->
+                val topicMetadata = metadataService.topicMetadata(topic)
+                    ?: throw Exception("Topic '$topic' does not exist")
+
                 eventsService
                     .poll(
                         PollOptions(
                             topicOptions = listOf(
                                 PollOption(
-                                    topicName = topic
+                                    topicName = topic,
+                                    partitionRange = topicMetadata.partitions.associate { it.id to PartitionRange() }
                                 )
                             ),
                         )

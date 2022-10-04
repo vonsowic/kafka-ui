@@ -27,7 +27,7 @@ class ProducerTest(
         val req =
             KafkaEventCreateReq(
                 topic = "producer-test-1",
-                event = KafkaEvent(
+                event = KafkaEventCreate(
                     key = KafkaEventPart(
                         data = UUID.randomUUID().toString(),
                         type = KafkaEventPartType.STRING
@@ -59,7 +59,7 @@ class ProducerTest(
         val req =
             KafkaEventCreateReq(
                 topic = "producer-test-2",
-                event = KafkaEvent(
+                event = KafkaEventCreate(
                     key = KafkaEventPart.NIL,
                     value = KafkaEventPart.NIL
                 )
@@ -98,7 +98,7 @@ class ProducerTest(
         val req =
             KafkaEventCreateReq(
                 topic = "producer-test-3",
-                event = KafkaEvent(
+                event = KafkaEventCreate(
                     key = KafkaEventPart(
                         data = personId,
                         type = KafkaEventPartType.STRING
