@@ -1,15 +1,15 @@
 micronaut:
+  server.port: 8080
   application:
     name: kafka-ui
   router:
     static-resources:
-      main-page:
-        mapping: /
-        paths:
-          - file:ui/build/index.html
       static:
         paths:
-         - file:ui/build
+          - file:${kafka-ui.ui-dir}
+
+kafka-ui:
+  ui-dir: ui/build
 
 netty:
   default:
