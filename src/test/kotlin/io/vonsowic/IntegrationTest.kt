@@ -202,6 +202,13 @@ class KafkaExtension : BeforeAllCallback, BeforeEachCallback, AfterEachCallback,
             .let { props -> KafkaConsumer<Any?, Any?>(props) }
             .apply { subscribe(listOf(config.topic)) }
             .let { kafkaConsumer -> TestConsumer(consumer = kafkaConsumer) }
+
+//    private fun findTopicAnnotations(annotatedClass: Class<*>): Array<out Topic> =
+//        findAnnotations(annotatedClass, Topic::class.java)
+//    private fun <A : Annotation> findAnnotations(annotatedClass: Class<*>, annotationType: Class<A>): Array<out A> {
+//        return annotatedClass.getDeclaredAnnotationsByType(annotationType)
+//            + annotatedClass.declaredAnnotations.flatMap { findAnnotations(it::class.java, annotationType) }
+//    }
 }
 
 private fun Admin.create(topics: List<Topic>) =

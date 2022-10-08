@@ -1,3 +1,7 @@
 logger:
   levels:
     io.vonsowic: DEBUG
+
+micronaut:
+  server:
+    port: 8080
