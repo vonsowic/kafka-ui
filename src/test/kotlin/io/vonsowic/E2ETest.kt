@@ -3,6 +3,7 @@ package io.vonsowic
 import io.github.bonigarcia.wdm.WebDriverManager
 import org.junit.jupiter.api.extension.*
 import org.openqa.selenium.chrome.ChromeDriver
+import org.openqa.selenium.chrome.ChromeOptions
 
 
 @Retention(AnnotationRetention.RUNTIME)
@@ -17,8 +18,16 @@ class SeleniumExtension : BeforeAllCallback, AfterAllCallback, ParameterResolver
 
     override fun beforeAll(context: ExtensionContext?) {
         WebDriverManager.chromedriver().setup()
-        chromeDriver = ChromeDriver()
+        val options = ChromeOptions()
+        if (isHeadless()) {
+            options.addArguments("--headless")
+        }
+
+        chromeDriver = ChromeDriver(options)
     }
+
+    private fun isHeadless(): Boolean =
+        System.getenv("HEADLESS")?.toBoolean() ?: false
 
     override fun afterAll(context: ExtensionContext?) {
         chromeDriver.close()

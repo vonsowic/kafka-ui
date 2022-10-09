@@ -1,4 +1,4 @@
 
 rootProject.name="kafka-ui"
 
-//include("ui")
+include("ui")
