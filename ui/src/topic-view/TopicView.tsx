@@ -98,7 +98,7 @@ function TopicView() {
         .finally(() => {
           setLoading(false)
         })
-    }, [topic, page])
+    }, [topicName, topic, page])
 
 
     return (
