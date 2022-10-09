@@ -23,7 +23,7 @@ class DisplayEventsTest {
         producer: Producer<String, Address>,
         browser: ChromeDriver
     ) {
-        repeat(10) {
+        repeat(100) {
             val address = randomAddress()
             producer.send(ProducerRecord("e2e-display-events-address-1", 0, address.id, address)).get()
         }
@@ -44,7 +44,7 @@ class DisplayEventsTest {
         producer: Producer<String, Address>,
         browser: ChromeDriver
     ) {
-        repeat(10) {
+        repeat(100) {
             val address = randomAddress()
             producer.send(ProducerRecord("e2e-display-events-address-2", it % 2, address.id, address)).get()
         }
