@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Axios from 'axios'
 import { useParams } from "react-router-dom";
-import { Dimmer, List, Loader, Menu } from "semantic-ui-react";
+import { Dimmer, List, Loader, Pagination } from "semantic-ui-react";
 
 interface KafkaEventPart {
   data: any
@@ -27,7 +27,7 @@ interface TopicPartition {
 }
 
 // per partition and per page
-const NUM_OF_EVENTS_PER_PAGE = 5
+const NUM_OF_EVENTS_PER_PAGE = 10
 
 
 function getTopic(name: string): Promise<Topic> {
@@ -65,7 +65,7 @@ function TopicView() {
       if (!topic) {
         getTopic(topicName)
           .then(topic => {
-            setPage(numberOfPages(topic) - 1)
+            setPage(numberOfPages(topic))
             setTopic(topic)
           })
         return
@@ -81,7 +81,7 @@ function TopicView() {
       const offsetRange = (partition: TopicPartition, isLatest: boolean) => 
         Math.max(
           partition.earliestOffset,
-          partition.latestOffset - (numberOfPages(topic) - page - Number(isLatest)) * NUM_OF_EVENTS_PER_PAGE
+          partition.latestOffset - (numberOfPages(topic) - page - Number(isLatest) + 1) * NUM_OF_EVENTS_PER_PAGE
       )
       const params = topic.partitions
         .map(partition => ({ 
@@ -106,20 +106,13 @@ function TopicView() {
         <Dimmer active={isLoading} inverted>
           <Loader inverted>Loading</Loader>
         </Dimmer>
-        <Menu pagination>
-          {
-            Array.from(Array(numberOfPages(topic)).keys())
-              // .slice(selectPageButtonOffset, selectPageButtonOffset + selectPageButtonsNum)
-              .map(p => (
-                <Menu.Item 
-                  key={p}
-                  onClick={() => setPage(p)}
-                  active={p === page} as='a'>
-                    { p }
-                </Menu.Item>
-              ))
-          }
-        </Menu>
+        <Pagination
+            totalPages={numberOfPages(topic)} 
+            activePage={page}
+            onPageChange={(_, changedPage) => {
+              setPage(Number(changedPage.activePage))
+            }}
+        />
         <List divided relaxed>
           {
             events.map((e, i) => 

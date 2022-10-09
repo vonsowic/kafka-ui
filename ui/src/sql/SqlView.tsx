@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import Axios from 'axios'
-import { Button, Dimmer, Divider, Form, Icon, Loader, Menu, Message, Table, TextArea } from "semantic-ui-react";
+import { Button, Dimmer, Divider, Form, Loader, Message, Pagination, Segment, Table, TextArea } from "semantic-ui-react";
 
 
 type SqlResponse = object[]
@@ -88,12 +88,10 @@ function SqlView() {
   }
 
   function SqlRowsView(props: SqlRowsViewProps) {
-    const selectPageButtonsNum = 20
     const numberOfRowsPerPage = 50
     const numberOfPages = Math.ceil(props.rows.length / numberOfRowsPerPage)
 
-    const [page, setPage] = useState(0)
-    const [selectPageButtonOffset, setSelectPageButtonOffset] = useState(0)
+    const [page, setPage] = useState(1)
 
     return (
       <Table celled>
@@ -111,7 +109,7 @@ function SqlView() {
 
         <Table.Body>
           {
-            props.rows.slice(page * numberOfRowsPerPage, (page + 1) * numberOfRowsPerPage).map((row, i) => 
+            props.rows.slice((page - 1) * numberOfRowsPerPage, page * numberOfRowsPerPage).map((row, i) => 
               <Table.Row key={page * numberOfRowsPerPage + i}>
                 { 
                   row.map((cell, cellIndex) => 
@@ -128,44 +126,13 @@ function SqlView() {
         <Table.Footer>
           <Table.Row>
             <Table.HeaderCell colSpan={props.columnNames.length + 2}>
-              <Menu pagination>
-                <Menu.Item as='a' icon
-                    onClick={() => {
-                      const newOffset = selectPageButtonOffset - numberOfRowsPerPage
-                      if (newOffset > 0) {
-                        setSelectPageButtonOffset(newOffset)
-                      } else {
-                        setSelectPageButtonOffset(0)
-                      }
-                    }}>
-                  <Icon name='chevron left' />
-                </Menu.Item>
-
-                <Menu.Item 
-                    as='a'
-                    icon 
-                    onClick={() => {
-                      const newOffset = selectPageButtonOffset + numberOfRowsPerPage
-                      if (newOffset < numberOfPages) {
-                        setSelectPageButtonOffset(newOffset)
-                      } 
-                    }}>
-                  <Icon name='chevron right' />
-                </Menu.Item>
-
-                {
-                  Array.from(Array(numberOfPages).keys())
-                    .slice(selectPageButtonOffset, selectPageButtonOffset + selectPageButtonsNum)
-                    .map(p => (
-                      <Menu.Item 
-                        key={p}
-                        onClick={() => setPage(p)}
-                        active={p === page} as='a'>
-                          { p + 1 }
-                      </Menu.Item>
-                    ))
-                }
-              </Menu>
+              <Pagination 
+                totalPages={numberOfPages} 
+                activePage={page}
+                onPageChange={(_, changedPage) => {
+                  setPage(Number(changedPage.activePage))
+                }}
+              />
             </Table.HeaderCell>
           </Table.Row>
         </Table.Footer>
@@ -176,7 +143,12 @@ function SqlView() {
   function Readme() {
     return (
       <div>
+        <Message warning>
+          Experimental feature
+        </Message>
+        <Segment>
         Read Kafka as it was a SQL database. By executing SQL statement, if the topic has a schema, it is automatically converted to database schema
+        </Segment>
       </div>
     )
   }

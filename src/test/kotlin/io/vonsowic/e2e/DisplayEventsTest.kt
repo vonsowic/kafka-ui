@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test
 import org.openqa.selenium.By
 import org.openqa.selenium.chrome.ChromeDriver
 
-const val NUM_OF_EVENTS_PER_PAGE_PER_PARTITION = 5
+const val NUM_OF_EVENTS_PER_PAGE_PER_PARTITION = 10
 
 @E2ETest
 class DisplayEventsTest {
