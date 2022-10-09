@@ -1,8 +1,7 @@
-import React from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Axios from 'axios'
-import { Link, useParams } from "react-router-dom";
-import { Dimmer, Icon, List, Loader, Menu } from "semantic-ui-react";
+import { useParams } from "react-router-dom";
+import { Dimmer, List, Loader, Menu } from "semantic-ui-react";
 
 interface KafkaEventPart {
   data: any
@@ -42,13 +41,13 @@ function numberOfPages(topic: Topic | undefined): number {
   }
 
   const numbersOfRecors = topic.partitions.map(partition => partition.latestOffset - partition.earliestOffset)
-  return Math.ceil(Math.max(...numbersOfRecors) / NUM_OF_EVENTS_PER_PAGE) + 1
+  return Math.ceil(Math.max(...numbersOfRecors) / NUM_OF_EVENTS_PER_PAGE)
 }
 
 
 function TopicView() {
     const { topicName } = useParams();
-    if (topicName == undefined) {
+    if (!topicName) {
       throw Error('topic param must be defined')
     }
 
@@ -62,17 +61,13 @@ function TopicView() {
     //   },
     //   [events]
     // ) 
-    
-    useEffect(() => {
-      getTopic(topicName)
-        .then(topic => {
-          setPage(numberOfPages(topic) - 1)
-          setTopic(topic)
-        })
-    }, [])
-
     useEffect(() => {
       if (!topic) {
+        getTopic(topicName)
+          .then(topic => {
+            setPage(numberOfPages(topic) - 1)
+            setTopic(topic)
+          })
         return
       }
 
@@ -103,7 +98,7 @@ function TopicView() {
         .finally(() => {
           setLoading(false)
         })
-    }, [page])
+    }, [topic, page])
 
 
     return (

@@ -1,8 +1,6 @@
-import React from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import Axios from 'axios'
-import { Link, useParams } from "react-router-dom";
-import { Button, Container, Dimmer, Divider, Form, Icon, Label, Loader, Menu, Message, Table, TextArea } from "semantic-ui-react";
+import { Button, Dimmer, Divider, Form, Icon, Loader, Menu, Message, Table, TextArea } from "semantic-ui-react";
 
 
 type SqlResponse = object[]
@@ -22,7 +20,7 @@ function SqlView() {
       .then(({ data }) => {
         setErrorTitle('')
         setErrorMessage('')
-        if (data.length == 0) {
+        if (!data) {
           return
         }
 
@@ -84,12 +82,12 @@ function SqlView() {
 }
 
 
-  interface SqlRowsView {
+  interface SqlRowsViewProps {
     columnNames: string[]
     rows: any[][]
   }
 
-  function SqlRowsView(props: SqlRowsView) {
+  function SqlRowsView(props: SqlRowsViewProps) {
     const selectPageButtonsNum = 20
     const numberOfRowsPerPage = 50
     const numberOfPages = Math.ceil(props.rows.length / numberOfRowsPerPage)

@@ -1,4 +1,3 @@
-import React from 'react';
 import './App.css';
 import TopicList from './topic-list';
 import {
@@ -9,7 +8,7 @@ import {
 } from "react-router-dom";
 import TopicView from './topic-view';
 import SqlView from './sql';
-import { Container, Icon, Menu, Segment, Sidebar } from 'semantic-ui-react';
+import { Icon, Menu, Segment, Sidebar } from 'semantic-ui-react';
 
 function App() {
   return (
