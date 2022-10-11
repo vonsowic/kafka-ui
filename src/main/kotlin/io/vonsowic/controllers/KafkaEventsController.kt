@@ -1,10 +1,12 @@
 package io.vonsowic.controllers
 
 import io.micronaut.http.HttpRequest
+import io.micronaut.http.MediaType
 import io.micronaut.http.annotation.Body
 import io.micronaut.http.annotation.Controller
 import io.micronaut.http.annotation.Get
 import io.micronaut.http.annotation.Post
+import io.micronaut.http.sse.Event
 import io.vonsowic.KafkaEvent
 import io.vonsowic.KafkaEventCreateReq
 import io.vonsowic.KafkaEventPart
@@ -33,7 +35,10 @@ class KafkaEventsController(
     fun sendEvent(@Body req: KafkaEventCreateReq): Mono<Void> =
         senderService.send(req)
 
-    @Get
+    @Get(produces = [MediaType.TEXT_EVENT_STREAM])
+    fun stream(req: HttpRequest<Void>): Flux<Event<KafkaEvent>> = poll(req).map { Event.of(it) }
+
+    @Get(produces = [MediaType.APPLICATION_JSON])
     fun poll(req: HttpRequest<Void>): Flux<KafkaEvent> =
         kafkaEventsService
             .poll(req.pollOptions())
@@ -74,9 +79,15 @@ class KafkaEventsController(
                             }
                     }
                     .forEach {
-                        topicToPartitionToRange[it.first.topic()]!!
-                            .computeIfAbsent(it.first.partition()) { MutablePartitionRange() }
-                            .endOffset = it.second
+                        val range =
+                            topicToPartitionToRange[it.first.topic()]!!
+                                .computeIfAbsent(it.first.partition()) { MutablePartitionRange() }
+
+                        if (MediaType.TEXT_EVENT_STREAM_TYPE in accept()) {
+                            range.endOffset = Long.MAX_VALUE
+                        } else {
+                            range.endOffset = it.second
+                        }
                     }
 
                 params.entries

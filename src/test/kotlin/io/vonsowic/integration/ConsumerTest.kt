@@ -4,8 +4,10 @@ import io.confluent.kafka.serializers.KafkaAvroSerializer
 import io.micronaut.core.type.Argument
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpStatus
+import io.micronaut.http.MediaType
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
+import io.micronaut.http.client.sse.SseClient
 import io.vonsowic.*
 import io.vonsowic.test.avro.Id
 import net.datafaker.Faker
@@ -18,7 +20,11 @@ import org.apache.kafka.common.TopicPartition
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.SoftAssertions.assertSoftly
 import org.junit.jupiter.api.Test
+import org.testcontainers.shaded.org.awaitility.Awaitility.await
+import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
+import java.net.URL
+import java.time.Duration
 import java.util.*
 
 @IntegrationTest
@@ -46,6 +52,7 @@ class ConsumerTest(
 
         val req = HttpRequest.GET<List<KafkaEvent>>("/events")
             .apply {
+                accept(MediaType.APPLICATION_JSON)
                 with(parameters) {
                     add("t0", "consumer-test-5-1")
                     add("t1", "consumer-test-5-2")
@@ -240,5 +247,42 @@ class ConsumerTest(
                         .withFailMessage("aRecord.nestedField")
                 }
             }
+    }
+
+    @Topic("consumer-test-6")
+    @Test
+    fun `should start streaming Kafka events with key Id and value UberAvro`(
+        @ProducerOptions(
+            keySerializer = KafkaAvroSerializer::class,
+            valueSerializer = KafkaAvroSerializer::class
+        )
+        producer: Producer<SpecificRecord, SpecificRecord>
+    ) {
+        val stream =
+            SseClient.create(URL("http://localhost:8080"))
+                .eventStream("/api/events?t0=consumer-test-6", Argument.of(KafkaEvent::class.java))
+
+        var receivedRecord: KafkaEvent? = null
+        Flux.from(stream)
+            .subscribe { event ->
+                receivedRecord = event.data
+            }
+
+        val id = Id(UUID.randomUUID().toString())
+        val address = randomAddress(id.id)
+        producer.send(ProducerRecord("consumer-test-6", id, address)).get()
+
+        await()
+            .atMost(Duration.ofSeconds(10))
+            .until { receivedRecord != null }
+
+        assertSoftly { softly ->
+            val key = receivedRecord!!.key.data as Map<String, Any?>
+            val value = receivedRecord!!.value.data as Map<String, Any?>
+            softly.assertThat(key["id"]).isEqualTo(id.id)
+            softly.assertThat(value["id"]).isEqualTo(address.id)
+            softly.assertThat(value["address"]).isEqualTo(address.address)
+            softly.assertThat(value["personId"]).isEqualTo(address.personId)
+        }
     }
 }
