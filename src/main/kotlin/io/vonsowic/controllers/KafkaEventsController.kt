@@ -16,7 +16,6 @@ import org.apache.avro.util.Utf8
 import org.apache.kafka.common.TopicPartition
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
-import java.time.Duration
 
 
 private val TOPIC_REGEX = Regex("^t(\\d+)\$")
@@ -139,6 +138,9 @@ private fun KafkaEventPart.toMapIfAvro(): KafkaEventPart =
 private fun GenericData.Record.value(field: Schema.Field): Any? =
     when (val value = this[field.name()]) {
         is Utf8 -> value.toString()
+        is GenericData.Record -> value.schema.fields.associate { it.name() to value.value(it) }
+        is GenericData.EnumSymbol -> value.toString()
+        is GenericData.Fixed -> value.bytes().toString()
         else -> value
     }
 

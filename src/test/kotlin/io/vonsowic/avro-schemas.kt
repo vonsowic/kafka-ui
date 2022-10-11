@@ -1,6 +1,6 @@
 package io.vonsowic
 
-import io.vonsowic.test.avro.Address
+import io.vonsowic.test.avro.*
 import net.datafaker.Faker
 import org.apache.avro.Schema
 import org.apache.avro.SchemaBuilder
@@ -102,5 +102,35 @@ fun randomPersonV2(): GenericData.Record =
             .set("aDouble", random().nextDouble())
             .set("aBoolean", random().nextBoolean())
             .set("aInt", random().nextInt())
+            .build()
+    }
+
+fun randomUberAvro(): UberAvro =
+    with(Faker.instance()) {
+        UberAvro
+            .newBuilder()
+            .setANull(null)
+            .setABoolean(random().nextBoolean())
+            .setAInt(random().nextInt())
+            .setALong(random().nextLong())
+            .setAFloat(random().nextFloat())
+            .setADouble(random().nextDouble())
+            .setARecord(
+                TestNestedRecord
+                    .newBuilder()
+                    .setNestedField(UUID.randomUUID().toString())
+                    .build()
+            )
+            .setAEnum(TestEnum.values()[random().nextInt(0, 2)])
+            .setAStringArray((0..(random().nextInt(3, 20))).map { "${name().firstName()} ${name().lastName()}" })
+            .setALongMap(
+                mapOf(
+                    "key1" to random().nextLong(),
+                    "key2" to random().nextLong(),
+                    "key3" to random().nextLong()
+                )
+            )
+            .setAFixed(TestFixed(UUID.randomUUID().toString().substring(0, 16).toByteArray()))
+            .setAString(UUID.randomUUID().toString())
             .build()
     }

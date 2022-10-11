@@ -7,13 +7,14 @@ import io.micronaut.http.HttpStatus
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
 import io.vonsowic.*
+import io.vonsowic.test.avro.Id
 import net.datafaker.Faker
 import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericRecordBuilder
+import org.apache.avro.specific.SpecificRecord
 import org.apache.kafka.clients.producer.Producer
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
-import org.assertj.core.api.Assertions
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.SoftAssertions.assertSoftly
 import org.junit.jupiter.api.Test
@@ -168,6 +169,76 @@ class ConsumerTest(
                     .containsEntry("firstName", person["firstName"])
                     .containsEntry("lastName", person["lastName"])
                     .containsEntry("birthDate", person["birthDate"])
+            }
+    }
+
+    @Topic("consumer-test-5")
+    @Test
+    fun `should fetch all Kafka events with key Id and value UberAvro`(
+        @ProducerOptions(
+            keySerializer = KafkaAvroSerializer::class,
+            valueSerializer = KafkaAvroSerializer::class
+        )
+        producer: Producer<SpecificRecord, SpecificRecord>
+    ) {
+        val id = Id(UUID.randomUUID().toString())
+        val uberAvro = randomUberAvro()
+        producer.send(ProducerRecord("consumer-test-5", id, uberAvro)).get()
+
+
+        httpClient.fetchEvents("consumer-test-5")
+            .apply {
+                assertThat(status).isEqualTo(HttpStatus.OK)
+                assertThat(body()).hasSize(1)
+            }
+            .let { it.body()[0] }
+            .apply {
+                assertSoftly { softly ->
+                    softly.assertThat(key.type.toString()).isEqualTo("AVRO")
+                    softly.assertThat(value.type.toString()).isEqualTo("AVRO")
+                    val key = key.data as Map<String, Any>
+                    val value = value.data as Map<String, Any>
+
+                    softly.assertThat(key["id"])
+                        .isEqualTo(id.id.toString())
+                        .withFailMessage("id")
+                    softly.assertThat(value["aNull"])
+                        .isEqualTo(null)
+                        .withFailMessage("aNull")
+                    softly.assertThat(value["aBoolean"])
+                        .isEqualTo(uberAvro.aBoolean)
+                        .withFailMessage("aBoolean")
+                    softly.assertThat(value["aInt"])
+                        .isEqualTo(uberAvro.aInt)
+                        .withFailMessage("aInt")
+                    softly.assertThat(value["aLong"])
+                        .isEqualTo(uberAvro.aLong)
+                        .withFailMessage("aLong")
+                    softly.assertThat(value["aFloat"].toString().substring(0, 6))
+                        .isEqualTo(uberAvro.aFloat.toString().substring(0, 6))
+                        .withFailMessage("aFloat")
+                    softly.assertThat(value["aDouble"])
+                        .isEqualTo(uberAvro.aDouble)
+                        .withFailMessage("aDouble")
+                    softly.assertThat(value["aEnum"])
+                        .isEqualTo(uberAvro.aEnum.toString())
+                        .withFailMessage("aEnum")
+                    softly.assertThat(value["aStringArray"])
+                        .isEqualTo(uberAvro.aStringArray.map { it.toString() })
+                        .withFailMessage("aStringArray")
+                    softly.assertThat(value["aLongMap"])
+                        .isEqualTo(uberAvro.aLongMap)
+                        .withFailMessage("aLongMap")
+                    softly.assertThat(value["aFixed"])
+                        .isNotNull
+                        .withFailMessage("aFixed")
+                    softly.assertThat(value["aString"])
+                        .isEqualTo(uberAvro.aString.toString())
+                        .withFailMessage("aString")
+                    softly.assertThat((value["aRecord"] as Map<String, Any>)["nestedField"].toString())
+                        .isEqualTo(uberAvro.aRecord.nestedField.toString())
+                        .withFailMessage("aRecord.nestedField")
+                }
             }
     }
 }

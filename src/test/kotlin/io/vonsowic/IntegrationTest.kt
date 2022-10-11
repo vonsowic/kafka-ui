@@ -103,9 +103,9 @@ class KafkaExtension : BeforeAllCallback, BeforeEachCallback, AfterEachCallback,
                         .forStatusCode(200)
                 )
 
-        fun bootstrapServers(): String = "PLAINTEXT://0.0.0.0:${infra.getServicePort("broker", 9092)}"
+        fun bootstrapServers(): String = "PLAINTEXT://0.0.0.0:9092"
 
-        fun schemaRegistryUrl(): String = "http://localhost:${infra.getServicePort("schema-registry", 8081)}"
+        fun schemaRegistryUrl(): String = "http://localhost:8081"
     }
 
     override fun beforeAll(context: ExtensionContext) {

@@ -1,0 +1,83 @@
+{
+  "type": "record",
+  "name": "UberAvro",
+  "doc": "Avro that contains all supported fields",
+  "namespace": "io.vonsowic.test.avro",
+  "fields": [
+    {
+      "name": "aNull",
+      "type": "null"
+    },
+    {
+      "name": "aBoolean",
+      "type": "boolean"
+    },
+    {
+      "name": "aInt",
+      "type": "int"
+    },
+    {
+      "name": "aLong",
+      "type": "long"
+    },
+    {
+      "name": "aFloat",
+      "type": "float"
+    },
+    {
+      "name": "aDouble",
+      "type": "double"
+    },
+    {
+      "name": "aRecord",
+      "type": {
+        "type": "record",
+        "name": "TestNestedRecord",
+        "fields": [
+          {
+            "name": "nestedField",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "aEnum",
+      "type": {
+        "type": "enum",
+        "name": "TestEnum",
+        "symbols": [
+          "ENUM_VAL_1",
+          "ENUM_VAL_2",
+          "ENUM_VAL_3"
+        ]
+      }
+    },
+    {
+      "name": "aStringArray",
+      "type": {
+        "type": "array",
+        "items": "string"
+      }
+    },
+    {
+      "name": "aLongMap",
+      "type": {
+        "type": "map",
+        "values": "long"
+      }
+    },
+    {
+      "name": "aFixed",
+      "type": {
+        "type": "fixed",
+        "name": "TestFixed",
+        "size": 16
+      }
+    },
+    {
+      "name": "aString",
+      "type": "string"
+    }
+  ]
+}

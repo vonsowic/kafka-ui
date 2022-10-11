@@ -1,0 +1,11 @@
+{
+  "type": "record",
+  "name": "Id",
+  "namespace": "io.vonsowic.test.avro",
+  "fields": [
+    {
+      "name": "id",
+      "type": "string"
+    }
+  ]
+}
