@@ -102,7 +102,7 @@ class ConsumerTest(
         @ProducerOptions
         producer: Producer<String, String?>
     ) {
-        producer.send(ProducerRecord("consumer-test-2", null, null)).get()
+        val recordMetadata = producer.send(ProducerRecord("consumer-test-2", null, null)).get()
 
         httpClient.fetchEvents("consumer-test-2")
             .apply {
@@ -111,6 +111,9 @@ class ConsumerTest(
             }
             .let { it.body()[0] }
             .apply {
+                assertThat(topic).isEqualTo(recordMetadata.topic())
+                assertThat(partition).isEqualTo(recordMetadata.partition())
+                assertThat(offset).isEqualTo(recordMetadata.offset())
                 assertThat(key.type).isEqualTo(KafkaEventPartType.NIL)
                 assertThat(key.data).isEqualTo(0)
                 assertThat(value.type).isEqualTo(KafkaEventPartType.NIL)

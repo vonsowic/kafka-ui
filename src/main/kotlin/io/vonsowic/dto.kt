@@ -21,6 +21,7 @@ data class KafkaEventCreate(
 data class KafkaEvent(
     val topic: String,
     val partition: Int,
+    val offset: Long,
     val key: KafkaEventPart,
     val value: KafkaEventPart,
     val headers: Map<String, String> = mapOf()
