@@ -63,7 +63,6 @@ function TopicView() {
       (kafkaEvent: any) => {
         return setEvents(prevEvents => ([JSON.parse(kafkaEvent), ...prevEvents]))
       },
-      // previous version: [events]
       []
     ) 
 
@@ -125,6 +124,7 @@ function TopicView() {
             setLoading(false)
           })
       }
+    // eslint-disable-next-line
     }, [topicName, topic, page, isStreaming])
 
 
