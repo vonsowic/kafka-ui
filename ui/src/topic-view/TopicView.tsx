@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Axios from 'axios'
 import { useParams } from "react-router-dom";
-import { Dimmer, List, Loader, Pagination } from "semantic-ui-react";
+import { Button, Dimmer, Icon, List, Loader, Pagination } from "semantic-ui-react";
 
 interface KafkaEventPart {
   data: any
@@ -9,7 +9,9 @@ interface KafkaEventPart {
 }
 
 interface KafkaEvent {
+  topic: string
   partition: number
+  offset: number
   key: KafkaEventPart
   value: KafkaEventPart
   headers: Map<string, string>
@@ -51,16 +53,20 @@ function TopicView() {
       throw Error('topic param must be defined')
     }
 
+    const eventSource = useRef<EventSource | null>(null)
+    const [isStreaming, setStreaming] = useState(false)
     const [isLoading, setLoading] = useState(true)
     const [page, setPage] = useState(0)
     const [events, setEvents] = useState([] as Array<KafkaEvent>)
     const [topic, setTopic] = useState(undefined as any as Topic)
-    // const addKafkaEvent = useCallback(
-    //   (kafkaEvent: any) => {
-    //     return setEvents(prevEvents => ([kafkaEvent, ...prevEvents]))
-    //   },
-    //   [events]
-    // ) 
+    const addKafkaEvent = useCallback(
+      (kafkaEvent: any) => {
+        return setEvents(prevEvents => ([JSON.parse(kafkaEvent), ...prevEvents]))
+      },
+      // previous version: [events]
+      []
+    ) 
+
     useEffect(() => {
       if (!topic) {
         getTopic(topicName)
@@ -71,34 +77,55 @@ function TopicView() {
         return
       }
 
-      // const url = process.env.NODE_ENV === "development"
-      //   ? `http://0.0.0.0:8080/api/topics/${topicName}/events?follow=true`
-      //   : `/api/topics/${topicName}/events?follow=true`
-      // const es = new EventSource(url) 
-      // es.onmessage = (message) => addKafkaEvent(message.data)
-
-
       const offsetRange = (partition: TopicPartition, isLatest: boolean) => 
         Math.max(
           partition.earliestOffset,
           partition.latestOffset - (numberOfPages(topic) - page - Number(isLatest) + 1) * NUM_OF_EVENTS_PER_PAGE
       )
-      const params = topic.partitions
-        .map(partition => ({ 
-          [`t0p${partition.id}e`]: offsetRange(partition, false),
-          [`t0p${partition.id}l`]: offsetRange(partition, true)
-        }))
-        .reduce((acc: any, it: any) => ({ ...acc, ...it }), ({ t0: topicName } as any))
       
-      setLoading(true)
-      Axios.get<any[]>('/api/events', { params })
-        .then(({ data }) => {
-          setEvents(data)
+      if (isStreaming) {
+        const params = { t0: topicName } as any
+        events.forEach(event => {
+          const partitionKey = `t0p${event.partition}e`
+          const offset = event.offset + 1 
+          if (offset > (params[partitionKey] || -1)) {
+            params[partitionKey] = offset
+          }
         })
-        .finally(() => {
-          setLoading(false)
-        })
-    }, [topicName, topic, page])
+
+        const paramStr =
+           Object.entries(params)
+            .map(([key, value]) => `${key}=${value}`)
+            .join('&')
+
+        const url = process.env.NODE_ENV === "development"
+          ? `http://0.0.0.0:8080/api/events?${paramStr}`
+          : `/api/events?${paramStr}`
+
+        eventSource.current = new EventSource(url) 
+        eventSource.current.onmessage = (message) => addKafkaEvent(message.data)
+      } else {
+        if (eventSource) {
+          eventSource.current?.close()
+          eventSource.current = null
+        }
+
+        const params = topic.partitions
+          .map(partition => ({ 
+            [`t0p${partition.id}e`]: offsetRange(partition, false),
+            [`t0p${partition.id}l`]: offsetRange(partition, true)
+          }))
+          .reduce((acc: any, it: any) => ({ ...acc, ...it }), ({ t0: topicName } as any))
+        setLoading(true)
+        Axios.get<any[]>('/api/events', { params })
+          .then(({ data }) => {
+            setEvents(data)
+          })
+          .finally(() => {
+            setLoading(false)
+          })
+      }
+    }, [topicName, topic, page, isStreaming])
 
 
     return (
@@ -107,12 +134,16 @@ function TopicView() {
           <Loader inverted>Loading</Loader>
         </Dimmer>
         <Pagination
+            disabled={isStreaming}
             totalPages={numberOfPages(topic)} 
             activePage={page}
             onPageChange={(_, changedPage) => {
               setPage(Number(changedPage.activePage))
             }}
         />
+        <Button icon basic onClick={() => setStreaming(!isStreaming)}>
+          <Icon name={isStreaming ? 'pause' : 'play'} />
+        </Button>
         <List divided relaxed>
           {
             events.map((e, i) => 
@@ -121,6 +152,7 @@ function TopicView() {
                   <List.Header as='a'>{JSON.stringify(e.key.data, null, 2)}</List.Header>
                   <List.Description as='a'>{JSON.stringify(e.value.data, null, 2)}</List.Description>
                 </List.Content>
+
               </List.Item>
             )
           }
