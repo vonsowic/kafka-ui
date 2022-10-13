@@ -60,6 +60,7 @@ function TopicView() {
     const [events, setEvents] = useState([] as Array<KafkaEvent>)
     const [topic, setTopic] = useState(undefined as any as Topic)
     const addKafkaEvent = useCallback(
+      // TODO: update topic state
       (kafkaEvent: any) => {
         return setEvents(prevEvents => ([JSON.parse(kafkaEvent), ...prevEvents]))
       },
@@ -116,7 +117,7 @@ function TopicView() {
           }))
           .reduce((acc: any, it: any) => ({ ...acc, ...it }), ({ t0: topicName } as any))
         setLoading(true)
-        Axios.get<any[]>('/api/events', { params })
+        Axios.get<KafkaEvent[]>('/api/events', { params })
           .then(({ data }) => {
             setEvents(data)
           })
@@ -129,10 +130,11 @@ function TopicView() {
 
 
     return (
-      <div>
+      <>
         <Dimmer active={isLoading} inverted>
           <Loader inverted>Loading</Loader>
         </Dimmer>
+
         <Pagination
             disabled={isStreaming}
             totalPages={numberOfPages(topic)} 
@@ -144,6 +146,7 @@ function TopicView() {
         <Button icon basic onClick={() => setStreaming(!isStreaming)}>
           <Icon name={isStreaming ? 'pause' : 'play'} />
         </Button>
+        
         <List divided relaxed>
           {
             events.map((e, i) => 
@@ -152,12 +155,11 @@ function TopicView() {
                   <List.Header as='a'>{JSON.stringify(e.key.data, null, 2)}</List.Header>
                   <List.Description as='a'>{JSON.stringify(e.value.data, null, 2)}</List.Description>
                 </List.Content>
-
               </List.Item>
             )
           }
         </List>
-      </div>
+      </>
     );
   }
   

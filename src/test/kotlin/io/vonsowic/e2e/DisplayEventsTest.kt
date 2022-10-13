@@ -5,12 +5,18 @@ import io.vonsowic.*
 import io.vonsowic.test.avro.Address
 import org.apache.kafka.clients.producer.Producer
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.SoftAssertions.assertSoftly
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.openqa.selenium.By
 import org.openqa.selenium.chrome.ChromeDriver
+import java.lang.Thread.sleep
 
 const val NUM_OF_EVENTS_PER_PAGE_PER_PARTITION = 10
+
+const val TOPIC_3 = "e2e-display-events-address-3"
+
 
 @E2ETest
 class DisplayEventsTest {
@@ -54,5 +60,40 @@ class DisplayEventsTest {
             it.assertThat(browser.getElements(By.cssSelector("div.item")))
                 .hasSize(NUM_OF_EVENTS_PER_PAGE_PER_PARTITION * 2)
         }
+    }
+
+    @DisplayName(
+        """
+        1. Should display one event
+        3. Second event is sent
+        3. Start streaming
+        4. Second event is display
+        5. Third event is sent
+        6. Third event is displayed
+    """
+    )
+    @Topic(TOPIC_3)
+    @Test
+    fun testSSE(
+        @ProducerOptions(valueSerializer = KafkaAvroSerializer::class)
+        producer: Producer<String, Address>,
+        browser: ChromeDriver
+    ) {
+        val address = randomAddress()
+        producer.send(ProducerRecord(TOPIC_3, address.id, address)).get()
+        browser.openEventsPage(TOPIC_3)
+        assertThat(browser.getElements(By.cssSelector("div.item"))).hasSize(1)
+
+        producer.send(ProducerRecord(TOPIC_3, address.id, address)).get()
+        sleep(1000)
+        assertThat(browser.getElements(By.cssSelector("div.item"))).hasSize(1)
+
+        browser.getElement(By.className("play")).click()
+        sleep(1000)
+        assertThat(browser.getElements(By.cssSelector("div.item"))).hasSize(2)
+
+        producer.send(ProducerRecord(TOPIC_3, address.id, address)).get()
+        sleep(1000)
+        assertThat(browser.getElements(By.cssSelector("div.item"))).hasSize(3)
     }
 }
