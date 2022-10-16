@@ -38,7 +38,7 @@ class DisplayEventsTest {
         browser.getElement(By.xpath("//*[text()='e2e-display-events-address-1']")).click()
 
         assertSoftly {
-            it.assertThat(browser.getElements(By.cssSelector("div.item")))
+            it.assertThat(browser.getElements(By.cssSelector("div.card")))
                 .hasSize(NUM_OF_EVENTS_PER_PAGE_PER_PARTITION)
         }
     }
@@ -57,7 +57,7 @@ class DisplayEventsTest {
 
         browser.openEventsPage("e2e-display-events-address-2")
         assertSoftly {
-            it.assertThat(browser.getElements(By.cssSelector("div.item")))
+            it.assertThat(browser.getElements(By.cssSelector("div.card")))
                 .hasSize(NUM_OF_EVENTS_PER_PAGE_PER_PARTITION * 2)
         }
     }
@@ -82,18 +82,26 @@ class DisplayEventsTest {
         val address = randomAddress()
         producer.send(ProducerRecord(TOPIC_3, address.id, address)).get()
         browser.openEventsPage(TOPIC_3)
-        assertThat(browser.getElements(By.cssSelector("div.item"))).hasSize(1)
+        assertThat(browser.getElements(By.cssSelector("div.card"))).hasSize(1)
 
         producer.send(ProducerRecord(TOPIC_3, address.id, address)).get()
         sleep(1000)
-        assertThat(browser.getElements(By.cssSelector("div.item"))).hasSize(1)
+        assertThat(browser.getElements(By.cssSelector("div.card"))).hasSize(1)
 
         browser.getElement(By.className("play")).click()
         sleep(1000)
-        assertThat(browser.getElements(By.cssSelector("div.item"))).hasSize(2)
+        assertThat(browser.getElements(By.cssSelector("div.card"))).hasSize(2)
 
         producer.send(ProducerRecord(TOPIC_3, address.id, address)).get()
         sleep(1000)
-        assertThat(browser.getElements(By.cssSelector("div.item"))).hasSize(3)
+        assertThat(browser.getElements(By.cssSelector("div.card"))).hasSize(3)
+
+        browser.getElement(By.className("pause")).click()
+        sleep(1000)
+        assertThat(browser.getElements(By.cssSelector("div.card"))).hasSize(3)
+
+        producer.send(ProducerRecord(TOPIC_3, address.id, address)).get()
+        sleep(1000)
+        assertThat(browser.getElements(By.cssSelector("div.card"))).hasSize(3)
     }
 }
