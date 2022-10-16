@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Axios from 'axios'
 import { useParams } from "react-router-dom";
-import { Button, Card, Dimmer, Icon, List, Loader, Pagination } from "semantic-ui-react";
+import { Button, Card, Dimmer, Icon, Loader, Pagination } from "semantic-ui-react";
 
 interface KafkaEventPart {
   data: any
