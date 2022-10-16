@@ -1,29 +1,30 @@
-import React from "react";
 import { useEffect, useState } from "react";
 import Axios from 'axios'
 import { Link } from "react-router-dom";
-import {  Input, List, Radio } from 'semantic-ui-react'
-
-interface Topic {
-  name: string
-}
+import {  Dimmer, Input, List, Loader, Radio } from 'semantic-ui-react'
+import { Topic } from "../dto";
 
 function TopicList() {
   const [includeTechnical, setIncludeTechnical] = useState(false)
   const [topicFilter, setTopicFilter] = useState('')
-  const [topics, setTopics] = useState<Array<Topic>>([])
+  const [topics, setTopics] = useState<Topic[]>([])
+  const [loadingMessage, setLoadingMessage] = useState<string | null>('Loading topic list...')
+
   useEffect(() => {
     Axios.get('/api/topics')
       .then(res => setTopics(res.data))
+      .finally(() => setLoadingMessage(null))
   }, [])
 
   return (
-    <div>
+    <>
+      <Dimmer active={loadingMessage !== null} inverted>
+        <Loader inverted>{ loadingMessage }</Loader>
+      </Dimmer>
       <Input icon='search' placeholder='Search...' onChange={e => setTopicFilter(e.target.value)} />
       <Radio
           label='Include technical'
           toggle 
-          active={includeTechnical} 
           onClick={() => setIncludeTechnical(!includeTechnical)}>
       </Radio>
       <List>
@@ -38,7 +39,7 @@ function TopicList() {
         }
         
       </List>
-    </div>
+    </>
   );
 }
   

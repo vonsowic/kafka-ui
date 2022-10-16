@@ -113,6 +113,7 @@ class ConsumerTest(
             .apply {
                 assertThat(topic).isEqualTo(recordMetadata.topic())
                 assertThat(partition).isEqualTo(recordMetadata.partition())
+                assertThat(timestamp).isEqualTo(recordMetadata.timestamp())
                 assertThat(offset).isEqualTo(recordMetadata.offset())
                 assertThat(key.type).isEqualTo(KafkaEventPartType.NIL)
                 assertThat(key.data).isEqualTo(0)

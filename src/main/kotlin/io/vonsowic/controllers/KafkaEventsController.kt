@@ -47,6 +47,7 @@ class KafkaEventsController(
                     topic = record.topic(),
                     partition = record.partition(),
                     offset = record.offset(),
+                    timestamp = record.timestamp(),
                     key = record.key().toMapIfAvro(),
                     value = record.value().toMapIfAvro(),
                     headers = record.headers()
