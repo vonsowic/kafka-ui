@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Axios from 'axios'
 import { useParams } from "react-router-dom";
-import { Button, Card, Dimmer, Divider, Icon, Loader, Pagination } from "semantic-ui-react";
+import { Button, Card, Dimmer, Divider, Icon, Loader, Pagination, Statistic } from "semantic-ui-react";
 import { KafkaEvent, Topic, TopicPartition } from "../dto";
 import { JSONView } from "./JsonView";
 
 
-type PartitionedEvents = { [key: number]: Array<KafkaEvent>}
+type PartitionedEvents = { [key: number]: KafkaEvent[]}
 
 // per partition and per page
 const NUM_OF_EVENTS_PER_PAGE = 10
@@ -17,15 +17,58 @@ function getTopic(name: string): Promise<Topic> {
     .then(({ data }) => data)
 }
 
+function numberOfEvents(topic: Topic | undefined): number {
+  if (!topic) {
+    return 0
+  }
+
+  return topic.partitions
+    .map(p => p.latestOffset - p.earliestOffset)
+    .reduce((acc, it) => acc + it, 0)
+}
+
 function numberOfPages(topic: Topic | undefined): number {
   if (!topic) {
     return 0
   }
 
-  const numbersOfRecors = topic.partitions.map(partition => partition.latestOffset - partition.earliestOffset)
-  return Math.ceil(Math.max(...numbersOfRecors) / NUM_OF_EVENTS_PER_PAGE)
+  const minOffset = Math.min(...Object.values(topic.partitions).map(partition => partition.earliestOffset))
+  const maxOffset = Math.max(...Object.values(topic.partitions).map(partition => partition.latestOffset))
+  return Math.ceil((maxOffset - minOffset) / NUM_OF_EVENTS_PER_PAGE)
 }
 
+function page(topic: Topic | undefined, partitionedEvents: PartitionedEvents): number {
+  if (!topic || !partitionedEvents) {
+    return 0
+  }
+
+  const offsets = 
+    Object.values(partitionedEvents)
+      .flatMap(events => events)
+      .map(event => event.offset)
+
+  const minOffset = Math.min(...Object.values(topic.partitions).map(partition => partition.earliestOffset))
+  const latestOffset = Math.max(...offsets)
+  const p = Math.ceil((latestOffset - minOffset) / NUM_OF_EVENTS_PER_PAGE)
+  console.log('selected page number', p)
+  return p
+}
+
+function fetchEvents(topic: Topic, numberOfPages: number, page: number): Promise<KafkaEvent[]> {
+  const offsetRange = (partition: TopicPartition, isLatest: boolean) => 
+  Math.max(
+    partition.earliestOffset,
+    partition.latestOffset - (numberOfPages - page - Number(isLatest) + 1) * NUM_OF_EVENTS_PER_PAGE
+)
+const params = topic.partitions
+  .map(partition => ({ 
+    [`t0p${partition.id}e`]: offsetRange(partition, false),
+    [`t0p${partition.id}l`]: offsetRange(partition, true)
+  }))
+  .reduce((acc: any, it: any) => ({ ...acc, ...it }), ({ t0: topic.name } as any))
+
+return Axios.get<KafkaEvent[]>('/api/events', { params })
+  .then(({ data }) => data)}
 
 function TopicView() {
   const { topicName } = useParams();
@@ -36,44 +79,53 @@ function TopicView() {
   const eventSource = useRef<EventSource | null>(null)
   const [isStreaming, setStreaming] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null)
-  const [page, setPage] = useState(0)
   const [events, setEvents] = useState({} as PartitionedEvents) // events per partition
   const [topic, setTopic] = useState(undefined as any as Topic)
   const addKafkaEvent = useCallback(
-    // TODO: update topic state
     (kafkaEvent: any) => {
       const event = JSON.parse(kafkaEvent) as KafkaEvent
-      const partition = event.partition
-      console.log('sse event', event)
+      const { partition } = event
+      const offset = event.offset + 1
+      const topicPartition = topic.partitions.find(p => p.id === partition)
+      if (topicPartition?.latestOffset && offset > topicPartition.latestOffset) {
+        topicPartition.latestOffset = offset
+        setTopic(topic)
+      }
+
       return setEvents(prevEvents => {
-        console.log('prevEvents', prevEvents)
         return {
-        // ...prevEvents,
-        [event.partition]: [event, ...(prevEvents[partition] || [])].slice(0, NUM_OF_EVENTS_PER_PAGE)
+          ...prevEvents,
+          [event.partition]: [event, ...(prevEvents[partition] || [])].slice(0, NUM_OF_EVENTS_PER_PAGE)
         }
       })
     },
-    []
+    [topic]
   ) 
+
+  const loadEvents = (page: number) => {
+    setLoadingMessage('Loading events...')
+    const numOfPages = numberOfPages(topic)
+    fetchEvents(topic, numOfPages, page)
+      .then(kafkaEvents => {
+        const partitionsEvents: PartitionedEvents = {}
+        kafkaEvents.forEach(event => {
+          const partition = event.partition
+          partitionsEvents[partition] = [event, ...(partitionsEvents[partition] || [])]  
+        })
+        setEvents(partitionsEvents)
+      })
+      .finally(() => setLoadingMessage(null))
+  }
 
   useEffect(() => {
     if (!topic) {
       setLoadingMessage('Loading topic metadata...')
       getTopic(topicName)
-        .then(topic => {
-          setPage(numberOfPages(topic))
-          setTopic(topic)
-        })
+        .then(topic => setTopic(topic))
       return
     }
 
-    const offsetRange = (partition: TopicPartition, isLatest: boolean) => 
-      Math.max(
-        partition.earliestOffset,
-        partition.latestOffset - (numberOfPages(topic) - page - Number(isLatest) + 1) * NUM_OF_EVENTS_PER_PAGE
-    )
-    
-    if (isStreaming) {
+    if (isStreaming && !eventSource.current) {
       const params = 
         Object.entries(events)
           .map(([partition, partitionEvents]) => ({ partition, offset: 1 + Math.max(...partitionEvents.map(event => event.offset)) }))
@@ -82,8 +134,8 @@ function TopicView() {
       console.log('params', params)
       const paramStr =
           Object.entries(params)
-          .map(([key, value]) => `${key}=${value}`)
-          .join('&')
+            .map(([key, value]) => `${key}=${value}`)
+            .join('&')
 
       const url = process.env.NODE_ENV === "development"
         ? `http://0.0.0.0:8080/api/events?${paramStr}`
@@ -91,35 +143,19 @@ function TopicView() {
 
       eventSource.current = new EventSource(url) 
       eventSource.current.onmessage = (message) => addKafkaEvent(message.data)
-    } else if (eventSource.current) {
+      return () => {}
+    } 
+    
+    if (eventSource.current) {
       eventSource.current?.close()
       eventSource.current = null
-    } else {
-      const params = topic.partitions
-      .map(partition => ({ 
-        [`t0p${partition.id}e`]: offsetRange(partition, false),
-        [`t0p${partition.id}l`]: offsetRange(partition, true)
-      }))
-      .reduce((acc: any, it: any) => ({ ...acc, ...it }), ({ t0: topicName } as any))
+      return () => {}
+    }  
     
-    setLoadingMessage('Loading events...')
-    Axios.get<KafkaEvent[]>('/api/events', { params })
-      .then(({ data }) => {
-        const partitionsEvents: PartitionedEvents = {}
-        data.forEach(event => {
-          const partition = event.partition
-          partitionsEvents[partition] = [event, ...(partitionsEvents[partition] || [])]  
-        })
-        setEvents(partitionsEvents)
-      })
-      .finally(() => {
-        setLoadingMessage(null)
-      })
-    }
-    
+    loadEvents(numberOfPages(topic))
+    return () => {}
   // eslint-disable-next-line
-  }, [topicName, topic, page, isStreaming])
-
+  }, [topicName, topic, isStreaming])
 
   return (
     <>
@@ -127,19 +163,22 @@ function TopicView() {
         <Loader inverted>{ loadingMessage }</Loader>
       </Dimmer>
 
+      <Statistic size="mini">
+        <Statistic.Value>{ numberOfEvents(topic) }</Statistic.Value>
+        <Statistic.Label>Events</Statistic.Label>
+      </Statistic>
+
       <Pagination
           disabled={isStreaming}
           totalPages={numberOfPages(topic)} 
-          activePage={page}
+          activePage={page(topic, events)}
           onPageChange={(_, changedPage) => {
-            setPage(Number(changedPage.activePage))
+            loadEvents(Number(changedPage.activePage))
           }}
       />
       <Button icon basic onClick={() => setStreaming(!isStreaming)}>
         <Icon name={isStreaming ? 'pause' : 'play'} />
       </Button>
-
-      <Divider/>
       
       <Card.Group>
         {

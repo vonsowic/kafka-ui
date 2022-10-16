@@ -16,6 +16,7 @@ import java.lang.Thread.sleep
 const val NUM_OF_EVENTS_PER_PAGE_PER_PARTITION = 10
 
 const val TOPIC_3 = "e2e-display-events-address-3"
+const val TOPIC_4 = "e2e-display-events-address-4"
 
 
 @E2ETest
@@ -103,5 +104,33 @@ class DisplayEventsTest {
         producer.send(ProducerRecord(TOPIC_3, address.id, address)).get()
         sleep(1000)
         assertThat(browser.getElements(By.cssSelector("div.card"))).hasSize(3)
+    }
+
+    @Topic(TOPIC_4)
+    @Test
+    fun `should automatically add new page items on page selector`(
+        @ProducerOptions(valueSerializer = KafkaAvroSerializer::class)
+        producer: Producer<String, Address>,
+        browser: ChromeDriver
+    ) {
+        repeat(NUM_OF_EVENTS_PER_PAGE_PER_PARTITION) {
+            val address = randomAddress()
+            producer.send(ProducerRecord(TOPIC_4, 0, address.id, address)).get()
+        }
+
+        browser.openEventsPage(TOPIC_4)
+        sleep(1000)
+
+        // one page + 5 technical buttons
+        assertThat(browser.getElements(By.cssSelector("a.item"))).hasSize(7)
+
+        browser.getElement(By.className("play")).click()
+        repeat(NUM_OF_EVENTS_PER_PAGE_PER_PARTITION) {
+            val address = randomAddress()
+            producer.send(ProducerRecord(TOPIC_4, 0, address.id, address)).get()
+        }
+        sleep(1000)
+        // two pages + 5 technical buttons
+        assertThat(browser.getElements(By.cssSelector("a.item"))).hasSize(8)
     }
 }
