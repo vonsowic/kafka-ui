@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Axios from 'axios'
 import { useParams } from "react-router-dom";
-import { Button, Card, Dimmer, Divider, Icon, Loader, Pagination, Statistic } from "semantic-ui-react";
+import { Button, Card, Dimmer, Icon, Loader, Pagination, Statistic } from "semantic-ui-react";
 import { KafkaEvent, Topic, TopicPartition } from "../dto";
 import { JSONView } from "./JsonView";
 
