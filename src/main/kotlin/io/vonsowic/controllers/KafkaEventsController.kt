@@ -1,5 +1,6 @@
 package io.vonsowic.controllers
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.MediaType
 import io.micronaut.http.annotation.Body
@@ -28,7 +29,8 @@ private val PARTITION_OPTION_REGEX = Regex("^t(\\d+)p(\\d+)([el])\$")
 class KafkaEventsController(
     private val kafkaEventsService: KafkaEventsService,
     private val senderService: SenderService,
-    private val metadataService: MetadataService
+    private val metadataService: MetadataService,
+    private val objectMapper: ObjectMapper
 ) {
 
     @Post
@@ -36,10 +38,10 @@ class KafkaEventsController(
         senderService.send(req)
 
     @Get(produces = [MediaType.TEXT_EVENT_STREAM])
-    fun stream(req: HttpRequest<Void>): Flux<Event<KafkaEvent>> = poll(req).map { Event.of(it) }
+    fun stream(req: HttpRequest<Void>): Flux<Event<String>> = poll(req).map { Event.of(it) }
 
     @Get(produces = [MediaType.APPLICATION_JSON])
-    fun poll(req: HttpRequest<Void>): Flux<KafkaEvent> =
+    fun poll(req: HttpRequest<Void>): Flux<String> =
         kafkaEventsService
             .poll(req.pollOptions())
             .map { record ->
@@ -55,6 +57,12 @@ class KafkaEventsController(
                         ?.associate { header -> header.key() to (header.value()?.toString() ?: "") }
                         ?: mapOf()
                 )
+            }
+            .map { objectMapper.writeValueAsString(it) }
+            .let { events ->
+                req.parameters["s"]
+                    ?.let { search -> events.filter { it.contains(search, ignoreCase = true) } }
+                    ?: events
             }
 
     private fun HttpRequest<Void>.pollOptions(): PollOptions =

@@ -27,65 +27,14 @@ import java.net.URL
 import java.time.Duration
 import java.util.*
 
+const val TEST_TOPIC_7 = "consumer-test-7"
+
 @IntegrationTest
 class ConsumerTest(
     private val httpClient: AppClient,
     @Client("/api")
     private val rawHttpClient: HttpClient
 ) {
-
-    @Topic("consumer-test-5-1", partitions = 2)
-    @Topic("consumer-test-5-2", partitions = 1)
-    @Test
-    fun `should fetch kafka events using selected range`(
-        @ProducerOptions
-        producer: Producer<String?, String?>,
-    ) {
-        repeat(20) {
-            producer.send(ProducerRecord("consumer-test-5-1", 0, null, null))
-        }
-        repeat(10) {
-            producer.send(ProducerRecord("consumer-test-5-1", 1, null, null))
-            producer.send(ProducerRecord("consumer-test-5-2", 0, null, null))
-        }
-        producer.flush()
-
-        val req = HttpRequest.GET<List<KafkaEvent>>("/events")
-            .apply {
-                accept(MediaType.APPLICATION_JSON)
-                with(parameters) {
-                    add("t0", "consumer-test-5-1")
-                    add("t1", "consumer-test-5-2")
-
-                    // from offset 10 to 12 (including start and excluding end range)
-                    add("t0p0e", "10")
-                    add("t0p0l", "13")
-
-                    // from the last event (excluding last)
-                    add("t0p1e", "9")
-
-                    // to the first event only (including first)
-                    add("t1p0l", "1")
-                }
-            }
-
-        Mono.from(rawHttpClient.retrieve(req, Argument.listOf(KafkaEvent::class.java)))
-            .block()!!
-            .also {
-                assertSoftly { softly ->
-                    with(softly) {
-                        assertThat(it).hasSize(5)
-                        val countsPerTopicPartition =
-                            it.groupBy { TopicPartition(it.topic, it.partition) }
-                                .entries
-                                .associate { it.key to it.value.size }
-                        assertThat(countsPerTopicPartition[TopicPartition("consumer-test-5-1", 0)]).isEqualTo(3)
-                        assertThat(countsPerTopicPartition[TopicPartition("consumer-test-5-1", 1)]).isEqualTo(1)
-                        assertThat(countsPerTopicPartition[TopicPartition("consumer-test-5-2", 0)]).isEqualTo(1)
-                    }
-                }
-            }
-    }
 
     @Topic("consumer-test-1")
     @Test
@@ -253,6 +202,60 @@ class ConsumerTest(
             }
     }
 
+    @Topic("consumer-test-5-1", partitions = 2)
+    @Topic("consumer-test-5-2", partitions = 1)
+    @Test
+    fun `should fetch kafka events using selected range`(
+        @ProducerOptions
+        producer: Producer<String?, String?>,
+    ) {
+        repeat(20) {
+            producer.send(ProducerRecord("consumer-test-5-1", 0, null, null))
+        }
+        repeat(10) {
+            producer.send(ProducerRecord("consumer-test-5-1", 1, null, null))
+            producer.send(ProducerRecord("consumer-test-5-2", 0, null, null))
+        }
+        producer.flush()
+
+        val req = HttpRequest.GET<List<KafkaEvent>>("/events")
+            .apply {
+                accept(MediaType.APPLICATION_JSON)
+                with(parameters) {
+                    add("t0", "consumer-test-5-1")
+                    add("t1", "consumer-test-5-2")
+
+                    // from offset 10 to 12 (including start and excluding end range)
+                    add("t0p0e", "10")
+                    add("t0p0l", "13")
+
+                    // from the last event (excluding last)
+                    add("t0p1e", "9")
+
+                    // to the first event only (including first)
+                    add("t1p0l", "1")
+                }
+            }
+
+        Mono.from(rawHttpClient.retrieve(req, Argument.listOf(KafkaEvent::class.java)))
+            .block()!!
+            .also {
+                assertSoftly { softly ->
+                    with(softly) {
+                        assertThat(it).hasSize(5)
+                        val countsPerTopicPartition =
+                            it.groupBy { TopicPartition(it.topic, it.partition) }
+                                .entries
+                                .associate { it.key to it.value.size }
+                        assertThat(countsPerTopicPartition[TopicPartition("consumer-test-5-1", 0)]).isEqualTo(3)
+                        assertThat(countsPerTopicPartition[TopicPartition("consumer-test-5-1", 1)]).isEqualTo(1)
+                        assertThat(countsPerTopicPartition[TopicPartition("consumer-test-5-2", 0)]).isEqualTo(1)
+                    }
+                }
+            }
+    }
+
+
     @Topic("consumer-test-6")
     @Test
     fun `should start streaming Kafka events with key Id and value UberAvro`(
@@ -288,5 +291,45 @@ class ConsumerTest(
             softly.assertThat(value["address"]).isEqualTo(address.address)
             softly.assertThat(value["personId"]).isEqualTo(address.personId)
         }
+    }
+
+    @Topic(TEST_TOPIC_7)
+    @Test
+    fun `should fetch Kafka events matching search criteria`(
+        @ProducerOptions
+        producer: Producer<String?, String?>,
+    ) {
+        val search = "Gary"
+        repeat(20) {
+            val value =
+                if (it % 5 == 0) search
+                else UUID.randomUUID().toString()
+
+            producer.send(
+                ProducerRecord(
+                    TEST_TOPIC_7,
+                    UUID.randomUUID().toString(),
+                    value
+                )
+            )
+        }
+
+        producer.flush()
+
+        val req = HttpRequest.GET<List<KafkaEvent>>("/events")
+            .apply {
+                accept(MediaType.APPLICATION_JSON)
+                with(parameters) {
+                    add("s", search)
+                    add("t0", TEST_TOPIC_7)
+                }
+            }
+
+        Mono.from(rawHttpClient.retrieve(req, Argument.listOf(KafkaEvent::class.java)))
+            .block()!!
+            .also { events ->
+                assertThat(events).hasSize(4)
+                (0..3).forEach { assertThat(events[it].value.data).isEqualTo(search) }
+            }
     }
 }
