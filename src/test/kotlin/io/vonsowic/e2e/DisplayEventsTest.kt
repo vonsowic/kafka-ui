@@ -3,6 +3,7 @@ package io.vonsowic.e2e
 import io.confluent.kafka.serializers.KafkaAvroSerializer
 import io.vonsowic.*
 import io.vonsowic.test.avro.Address
+import org.apache.avro.specific.SpecificRecord
 import org.apache.kafka.clients.producer.Producer
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.assertj.core.api.Assertions.assertThat
@@ -12,11 +13,13 @@ import org.junit.jupiter.api.Test
 import org.openqa.selenium.By
 import org.openqa.selenium.chrome.ChromeDriver
 import java.lang.Thread.sleep
+import java.util.*
 
 const val NUM_OF_EVENTS_PER_PAGE_PER_PARTITION = 10
 
 const val TOPIC_3 = "e2e-display-events-address-3"
 const val TOPIC_4 = "e2e-display-events-address-4"
+const val TOPIC_5 = "e2e-display-events-address-5"
 
 
 @E2ETest
@@ -132,5 +135,50 @@ class DisplayEventsTest {
         sleep(1000)
         // two pages + 5 technical buttons
         assertThat(browser.getElements(By.cssSelector("a.item"))).hasSize(8)
+    }
+
+    @Topic(TOPIC_5)
+    @Test
+    fun `should use search input to display events matching criteria`(
+        @ProducerOptions(valueSerializer = KafkaAvroSerializer::class)
+        producer: Producer<String, SpecificRecord>,
+        browser: ChromeDriver
+    ) {
+        val searchedValue = randomUUID()
+        repeat(100) {
+            producer.send(ProducerRecord(TOPIC_5, randomUUID(), randomUberAvro())).get()
+        }
+
+        randomUberAvro()
+            .let { uberAvro ->
+                uberAvro.aString = "${UUID.randomUUID()}-$searchedValue-${UUID.randomUUID()}".uppercase()
+                producer.send(ProducerRecord(TOPIC_5, randomUUID(), uberAvro)).get()
+            }
+
+        repeat(100) {
+            producer.send(ProducerRecord(TOPIC_5, randomUUID(), randomUberAvro())).get()
+        }
+
+        randomUberAvro()
+            .let { uberAvro ->
+                val key = "${UUID.randomUUID()}-$searchedValue-${UUID.randomUUID()}".lowercase()
+                producer.send(ProducerRecord(TOPIC_5, key, uberAvro)).get()
+            }
+
+        repeat(100) {
+            producer.send(ProducerRecord(TOPIC_5, randomUUID(), randomUberAvro())).get()
+        }
+
+        browser.openEventsPage(TOPIC_5)
+        sleep(1000)
+
+        browser.getElement(By.tagName("input"))
+            .run {
+                sendKeys(searchedValue)
+                submit()
+            }
+
+        sleep(1000)
+        assertThat(browser.getElements(By.className("card"))).hasSize(2)
     }
 }
